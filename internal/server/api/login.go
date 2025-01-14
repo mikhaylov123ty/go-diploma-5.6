@@ -1,0 +1,53 @@
+package api
+
+import (
+	"fmt"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"log"
+	"net/http"
+)
+
+type AuthData struct {
+	Login    string `json:"login"`
+	Password string `json:"pass"`
+}
+
+type AuthHandler struct {
+	provider userProvider
+}
+
+type userProvider interface {
+	GetUser(string) (*models.UserData, error)
+}
+
+func NewAuthHandler(provider userProvider) *AuthHandler {
+	return &AuthHandler{
+		provider,
+	}
+}
+
+func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	login := (r.Context().Value("login")).(string)
+	pass := r.Context().Value("pass").(string)
+	user, err := h.provider.GetUser(login)
+	if err != nil {
+		if err.Error() == "user not found" {
+			log.Println(err)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	fmt.Println(user)
+
+	if user.Pass != pass {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Add("Authorization", r.Context().Value("token").(string))
+	w.WriteHeader(http.StatusOK)
+}
