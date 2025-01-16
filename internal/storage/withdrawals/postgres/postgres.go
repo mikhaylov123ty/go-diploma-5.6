@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
-
-	_ "github.com/lib/pq"
 )
 
 type Postgres struct {
@@ -25,12 +23,12 @@ func Init(dbURI string) (*Postgres, error) {
 	return &Postgres{conn}, nil
 }
 
-func (p *Postgres) SaveUser(login string, pass string) error {
+func (p *Postgres) Create(withdraw *models.WithdrawData) error {
 
 	return nil
 }
 
-func (p *Postgres) GetUser(login string) (*models.UserData, error) {
+func (p *Postgres) Get(userlogin string) ([]*models.WithdrawData, error) {
 
 	return nil, nil
 }

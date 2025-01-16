@@ -1,16 +1,14 @@
-package orders
+package balance
 
 import (
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders/memory"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders/postgres"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance/memory"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance/postgres"
 )
 
 type Storage interface {
-	CreateOrder(*models.OrderData) error
-	GetOrders(string) ([]*models.OrderData, error)
-	GetOrderByID(string) (*models.OrderData, error)
-	Update(*models.OrderData) error
+	GetBalance(string) (*models.BalanceData, error)
+	Update(*models.BalanceData) error
 	Close() error
 }
 

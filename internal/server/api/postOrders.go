@@ -1,10 +1,11 @@
 package api
 
 import (
-	"encoding/json"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"io"
+	"log"
 	"net/http"
+	"time"
 )
 
 type OrderPostHandler struct {
@@ -13,7 +14,8 @@ type OrderPostHandler struct {
 }
 
 type ordersPostSaver interface {
-	SaveOrder(string, string) error
+	CreateOrder(*models.OrderData) error
+	GetOrderByID(string) (*models.OrderData, error)
 }
 
 type ordersPostUserProvider interface {
@@ -28,35 +30,59 @@ func NewPostOrdersHandler(orderSaver ordersPostSaver, userProvider ordersPostUse
 }
 
 func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	login, err := r.Cookie("login")
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	user, err := h.userProvider.GetUser(login.Value)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		log.Println("ERROR READ BODY", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
 
-	var orderID string
-	if err = json.Unmarshal(body, &orderID); err != nil {
+	login := r.Context().Value("login").(string)
+
+	user, err := h.userProvider.GetUser(login)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	if err = h.orderSaver.SaveOrder(user.Login, orderID); err != nil {
+	if user == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	orderID := string(body)
+
+	orderCheck, err := h.orderSaver.GetOrderByID(orderID)
+	if err != nil && err.Error() != "order not found" {
+		log.Println("error get order by id", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	if orderCheck != nil {
+		if orderCheck.UserLogin != user.Login {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	order := &models.OrderData{
+		OrderID:    orderID,
+		UserLogin:  user.Login,
+		Status:     "NEW",
+		UploadedAt: time.Now(),
+	}
+
+	if err = h.orderSaver.CreateOrder(order); err != nil {
+		log.Println("ERROR CREATE ORDER", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	log.Println("CREATED ORDER", orderID)
+
+	w.WriteHeader(http.StatusAccepted)
 }

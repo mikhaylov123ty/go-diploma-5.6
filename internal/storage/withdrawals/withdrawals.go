@@ -1,16 +1,14 @@
-package orders
+package withdrawals
 
 import (
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders/memory"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders/postgres"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals/memory"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals/postgres"
 )
 
 type Storage interface {
-	CreateOrder(*models.OrderData) error
-	GetOrders(string) ([]*models.OrderData, error)
-	GetOrderByID(string) (*models.OrderData, error)
-	Update(*models.OrderData) error
+	Create(*models.WithdrawData) error
+	Get(string) ([]*models.WithdrawData, error)
 	Close() error
 }
 

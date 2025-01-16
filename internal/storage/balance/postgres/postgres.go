@@ -25,14 +25,14 @@ func Init(dbURI string) (*Postgres, error) {
 	return &Postgres{conn}, nil
 }
 
-func (p *Postgres) SaveUser(login string, pass string) error {
+func (p *Postgres) GetBalance(login string) (*models.BalanceData, error) {
 
-	return nil
+	return &models.BalanceData{}, nil
 }
 
-func (p *Postgres) GetUser(login string) (*models.UserData, error) {
+func (P *Postgres) Update(data *models.BalanceData) error {
 
-	return nil, nil
+	return nil
 }
 
 func (p *Postgres) Close() error {

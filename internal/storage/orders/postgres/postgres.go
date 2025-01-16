@@ -17,10 +17,14 @@ func Init(dbURI string) (*Postgres, error) {
 		return nil, fmt.Errorf("failed connect to db: %w", err)
 	}
 
+	if err = conn.Ping(); err != nil {
+		return nil, fmt.Errorf("failed ping db: %w", err)
+	}
+
 	return &Postgres{conn}, nil
 }
 
-func (p *Postgres) SaveOrder(userID string, orderID string) error {
+func (p *Postgres) CreateOrder(order *models.OrderData) error {
 
 	return nil
 }
@@ -28,6 +32,16 @@ func (p *Postgres) SaveOrder(userID string, orderID string) error {
 func (p *Postgres) GetOrders(userID string) ([]*models.OrderData, error) {
 
 	return nil, nil
+}
+
+func (p *Postgres) GetOrderByID(orderID string) (*models.OrderData, error) {
+
+	return nil, nil
+}
+
+func (p *Postgres) Update(data *models.OrderData) error {
+
+	return nil
 }
 
 func (p *Postgres) Close() error {

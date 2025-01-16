@@ -27,7 +27,7 @@ func NewAuthHandler(provider userProvider) *AuthHandler {
 }
 
 func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	login := (r.Context().Value("login")).(string)
+	login := r.Context().Value("login").(string)
 	pass := r.Context().Value("pass").(string)
 	user, err := h.provider.GetUser(login)
 	if err != nil {
@@ -43,7 +43,7 @@ func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(user)
 
-	if user.Pass != pass {
+	if user.Pass != "" && user.Pass != pass {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}

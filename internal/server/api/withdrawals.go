@@ -1,30 +1,42 @@
 package api
 
 import (
+	"encoding/json"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"log"
 	"net/http"
 )
 
 type WithdrawalsHandler struct {
-	userProvider ordersGetUserProvider
+	withdrawalsProvider withdrawalsProvider
 }
 
-type withdrawalsUserProvider interface {
-	GetUser(string) (*models.UserData, error)
-	SaveUser(string, string) error
+type withdrawalsProvider interface {
+	Get(userlogin string) ([]*models.WithdrawData, error)
 }
 
-func NewWithdrawalsHandler(withdrawalsUserProvider withdrawalsUserProvider) *WithdrawalsHandler {
+func NewWithdrawalsHandler(withdrawalsProvider withdrawalsProvider) *WithdrawalsHandler {
 	return &WithdrawalsHandler{
-		withdrawalsUserProvider,
+		withdrawalsProvider,
 	}
 }
 
 func (h *WithdrawalsHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	//TODO
-	// get user
+	login := r.Context().Value("login").(string)
 
-	//do something
+	resData, err := h.withdrawalsProvider.Get(login)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	//save user
+	res, err := json.Marshal(resData)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(res)
 }

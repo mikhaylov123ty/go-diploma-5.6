@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/api"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/users"
@@ -25,10 +26,12 @@ const (
 )
 
 type Server struct {
-	address    string
-	usersRepo  users.Storage
-	ordersRepo orders.Storage
-	secretKey  string
+	address     string
+	usersRepo   users.Storage
+	ordersRepo  orders.Storage
+	balanceRepo balance.Storage
+	witdrawRepo withdrawals.Storage
+	secretKey   string
 }
 
 type Claims struct {
@@ -36,12 +39,14 @@ type Claims struct {
 	Login string
 }
 
-func New(address string, usersRepo users.Storage, ordersRepo orders.Storage, secretKey string) *Server {
+func New(address string, usersRepo users.Storage, ordersRepo orders.Storage, balanceRepo balance.Storage, witdrawRepo withdrawals.Storage, secretKey string) *Server {
 	return &Server{
-		address:    address,
-		usersRepo:  usersRepo,
-		ordersRepo: ordersRepo,
-		secretKey:  secretKey,
+		address:     address,
+		usersRepo:   usersRepo,
+		ordersRepo:  ordersRepo,
+		balanceRepo: balanceRepo,
+		witdrawRepo: witdrawRepo,
+		secretKey:   secretKey,
 	}
 }
 
@@ -49,6 +54,7 @@ func (s *Server) Start() error {
 	router := s.newRouter()
 	//add compression, logs
 	//router.Use()
+	fmt.Println("Starting server on ", s.address)
 	return http.ListenAndServe(s.address, router)
 }
 
@@ -71,15 +77,15 @@ func (s *Server) newRouter() *chi.Mux {
 		})
 
 		router.Route("/balance", func(router chi.Router) {
-			router.Get("/", s.authHandler(api.NewGetBalanceHandler(s.usersRepo).Handle))
+			router.Get("/", s.authHandler(api.NewGetBalanceHandler(s.balanceRepo).Handle))
 
 			router.Route("/withdraw", func(router chi.Router) {
-				router.Post("/", s.authHandler(api.NewWithdrawHandler(s.usersRepo).Handle))
+				router.Post("/", s.authHandler(api.NewWithdrawHandler(s.balanceRepo, s.ordersRepo).Handle))
 			})
 		})
 
 		router.Route("/withdrawals", func(router chi.Router) {
-			router.Get("/", s.authHandler(api.NewWithdrawalsHandler(s.usersRepo).Handle))
+			router.Get("/", s.authHandler(api.NewWithdrawalsHandler(s.witdrawRepo).Handle))
 		})
 
 	})
@@ -138,7 +144,7 @@ func (s *Server) signToken(next http.HandlerFunc) http.HandlerFunc {
 		data := &models.UserData{}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			fmt.Errorf("read body: %w", err)
+			log.Println("read body error", err)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -148,26 +154,31 @@ func (s *Server) signToken(next http.HandlerFunc) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		if data.Login == "" {
+			log.Println("empty login")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		fmt.Println(data)
 
 		r.Body.Close()
 
 		newToken := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(1 * time.Minute)),
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(30 * time.Minute)),
 			},
 			Login: data.Login,
 		})
-		tokenString, err := newToken.SignedString([]byte(os.Getenv("SECRET")))
+		tokenString, err := newToken.SignedString([]byte(s.secretKey))
 		if err != nil {
 			return
 		}
+
 		ctx := context.WithValue(r.Context(), "token", tokenString)
 		ctx = context.WithValue(ctx, "login", data.Login)
 		ctx = context.WithValue(ctx, "pass", data.Pass)
 		r = r.WithContext(ctx)
 
 		next(w, r)
-
 	}
 }
