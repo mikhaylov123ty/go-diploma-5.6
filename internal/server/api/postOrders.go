@@ -52,6 +52,12 @@ func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orderID := string(body)
+	log.Println("POST ORDER POST", orderID)
+
+	if !checkLuhn(orderID) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
 
 	orderCheck, err := h.orderSaver.GetOrderByID(orderID)
 	if err != nil && err.Error() != "order not found" {
@@ -65,6 +71,7 @@ func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
+		
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -85,4 +92,21 @@ func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	log.Println("CREATED ORDER", orderID)
 
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func checkLuhn(purportedCC string) bool {
+	var sum = 0
+	var parity = len(purportedCC) % 2
+
+	for i, v := range purportedCC {
+		v -= 48
+		if i%2 == parity {
+			v *= 2
+			if v > 9 {
+				v -= 9
+			}
+		}
+		sum += int(v)
+	}
+	return sum%10 == 0
 }

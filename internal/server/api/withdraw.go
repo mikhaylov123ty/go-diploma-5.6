@@ -58,64 +58,69 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userLogin := r.Context().Value("login").(string)
+	log.Printf("WITHDRAW User login: %s", userLogin)
 
 	order, err := h.orderProvider.GetOrderByID(req.Order)
+	log.Printf("WITHDRAW Order ID: %s", req.Order)
 	if err != nil {
 		if err.Error() != "order not found" {
 			log.Printf("error getting order: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		log.Println(err)
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		return
 	}
+	if order == nil {
+		balance, err := h.balanceProvider.GetBalance(userLogin)
+		if err != nil {
+			if err.Error() != "user not found" {
+				log.Printf("error getting user: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			log.Println(err)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Printf("WITHDRAW Balance: %v", balance)
 
-	balance, err := h.balanceProvider.GetBalance(userLogin)
-	if err != nil {
-		if err.Error() != "user not found" {
-			log.Printf("error getting user: %v", err)
+		if balance.Current < req.Sum {
+			log.Printf("balance is too low: %v", balance.Current)
+			w.WriteHeader(http.StatusPaymentRequired)
+			return
+		}
+
+		//order.Accrual = req.Sum
+		balance.Current -= req.Sum
+		balance.Withdrawn += req.Sum
+
+		//if err = h.orderProvider.Update(order); err != nil {
+		//	log.Printf("error updating order: %v", err)
+		//	w.WriteHeader(http.StatusInternalServerError)
+		//	return
+		//}
+		if err = h.balanceProvider.Update(balance); err != nil {
+			log.Printf("error updating balance: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		log.Println(err)
-		w.WriteHeader(http.StatusNotFound)
-		return
+
+		withdrawData := &models.WithdrawData{
+			UserLogin:   userLogin,
+			Order:       req.Order,
+			Sum:         req.Sum,
+			ProcessedAt: time.Now(),
+		}
+
+		if err = h.withdrawProvider.Update(withdrawData); err != nil {
+			log.Printf("error updating withdraw: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
 	}
 
-	if balance.Current < req.Sum {
-		log.Printf("balance is too low: %v", balance.Current)
-		w.WriteHeader(http.StatusPaymentRequired)
-		return
-	}
-
-	//order.Accrual = req.Sum
-	balance.Current -= req.Sum
-	balance.Withdrawn += req.Sum
-
-	if err = h.orderProvider.Update(order); err != nil {
-		log.Printf("error updating order: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if err = h.balanceProvider.Update(balance); err != nil {
-		log.Printf("error updating balance: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	withdrawData := &models.WithdrawData{
-		UserLogin:   userLogin,
-		Order:       req.Order,
-		Sum:         req.Sum,
-		ProcessedAt: time.Now(),
-	}
-
-	if err = h.withdrawProvider.Update(withdrawData); err != nil {
-		log.Printf("error updating withdraw: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
+	log.Println("WITHDRAW order not found: ", err)
+	w.WriteHeader(http.StatusUnprocessableEntity)
+	return
 }
