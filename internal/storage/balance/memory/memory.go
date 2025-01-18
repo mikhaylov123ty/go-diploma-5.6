@@ -2,8 +2,9 @@ package memory
 
 import (
 	"fmt"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"sync"
+
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 )
 
 type Memory struct {
@@ -11,10 +12,10 @@ type Memory struct {
 	DB map[string]*models.BalanceData
 }
 
-func Init() (*Memory, error) {
+func Init() *Memory {
 	return &Memory{
 		DB: make(map[string]*models.BalanceData),
-	}, nil
+	}
 }
 
 func (m *Memory) GetBalance(login string) (*models.BalanceData, error) {
@@ -28,10 +29,6 @@ func (m *Memory) GetBalance(login string) (*models.BalanceData, error) {
 }
 
 func (m *Memory) Update(data *models.BalanceData) error {
-
-	return nil
-}
-
-func (m *Memory) Close() error {
+	m.DB[data.UserLogin] = data
 	return nil
 }

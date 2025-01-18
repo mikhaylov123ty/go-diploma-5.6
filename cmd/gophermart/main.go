@@ -1,13 +1,12 @@
 package main
 
 import (
+	"log"
+
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/config"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/users"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals"
-	"log"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/accrual"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage"
 )
 
 func main() {
@@ -18,29 +17,31 @@ func main() {
 	}
 
 	//init storage
-	usersRepo, err := users.New(cfg.DBURI)
+	storages, err := storage.New(cfg.DBURI)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed init storages: ", err)
 	}
-	ordersRepo, err := orders.New(cfg.DBURI)
-	if err != nil {
-		log.Fatal(err)
-	}
-	balanceRepo, err := balance.New(cfg.DBURI)
-	if err != nil {
-		log.Fatal(err)
-	}
-	witdrawRepo, err := withdrawals.New(cfg.DBURI)
-	if err != nil {
-		log.Fatal(err)
-	}
+	defer storages.Conn.Close()
 
-	defer usersRepo.Close()
-	defer ordersRepo.Close()
-	defer balanceRepo.Close()
+	//init accural
+	accrualInstance := accrual.NewAccrual(
+		cfg.AccuralSystemAddress,
+		storages.OrdersRepo,
+		storages.BalanceRepo,
+	)
+
+	//start processing accrual orders
+	go accrualInstance.Sync()
 
 	//init server
-	serverInstance := server.New(cfg.Address, usersRepo, ordersRepo, balanceRepo, witdrawRepo, cfg.Secret)
+	serverInstance := server.New(
+		cfg.Address,
+		storages.UsersRepo,
+		storages.OrdersRepo,
+		storages.BalanceRepo,
+		storages.WithdrawalRepo,
+		cfg.Secret,
+	)
 
 	//run server
 	if err = serverInstance.Start(); err != nil {

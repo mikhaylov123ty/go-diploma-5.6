@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 )
 
 type WithdrawRequest struct {
@@ -13,8 +14,9 @@ type WithdrawRequest struct {
 	Sum   float64 `json:"sum"`
 }
 type WithdrawHandler struct {
-	balanceProvider balanceProvider
-	orderProvider   orderProvider
+	balanceProvider  balanceProvider
+	orderProvider    orderProvider
+	withdrawProvider withdrawProvider
 }
 
 type balanceProvider interface {
@@ -27,10 +29,15 @@ type orderProvider interface {
 	Update(*models.OrderData) error
 }
 
-func NewWithdrawHandler(balanceProvider balanceProvider, orderProvider orderProvider) *WithdrawHandler {
+type withdrawProvider interface {
+	Update(*models.WithdrawData) error
+}
+
+func NewWithdrawHandler(balanceProvider balanceProvider, orderProvider orderProvider, withdrawProvider withdrawProvider) *WithdrawHandler {
 	return &WithdrawHandler{
-		balanceProvider: balanceProvider,
-		orderProvider:   orderProvider,
+		balanceProvider:  balanceProvider,
+		orderProvider:    orderProvider,
+		withdrawProvider: withdrawProvider,
 	}
 }
 
@@ -50,6 +57,8 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userLogin := r.Context().Value("login").(string)
+
 	order, err := h.orderProvider.GetOrderByID(req.Order)
 	if err != nil {
 		if err.Error() != "order not found" {
@@ -62,7 +71,7 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	balance, err := h.balanceProvider.GetBalance(r.Context().Value("login").(string))
+	balance, err := h.balanceProvider.GetBalance(userLogin)
 	if err != nil {
 		if err.Error() != "user not found" {
 			log.Printf("error getting user: %v", err)
@@ -80,8 +89,7 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.Accrual = req.Sum
-
+	//order.Accrual = req.Sum
 	balance.Current -= req.Sum
 	balance.Withdrawn += req.Sum
 
@@ -92,6 +100,19 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = h.balanceProvider.Update(balance); err != nil {
 		log.Printf("error updating balance: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	withdrawData := &models.WithdrawData{
+		UserLogin:   userLogin,
+		Order:       req.Order,
+		Sum:         req.Sum,
+		ProcessedAt: time.Now(),
+	}
+
+	if err = h.withdrawProvider.Update(withdrawData); err != nil {
+		log.Printf("error updating withdraw: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

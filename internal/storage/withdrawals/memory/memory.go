@@ -10,13 +10,13 @@ type Memory struct {
 	DB map[string]*models.WithdrawData
 }
 
-func Init() (*Memory, error) {
+func Init() *Memory {
 	return &Memory{
 		DB: make(map[string]*models.WithdrawData),
-	}, nil
+	}
 }
 
-func (m *Memory) Create(withdraw *models.WithdrawData) error {
+func (m *Memory) Update(withdraw *models.WithdrawData) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -38,8 +38,4 @@ func (m *Memory) Get(userlogin string) ([]*models.WithdrawData, error) {
 	}
 
 	return data, nil
-}
-
-func (m *Memory) Close() error {
-	return nil
 }

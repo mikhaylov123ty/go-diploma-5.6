@@ -22,11 +22,12 @@ func Init() (*Config, error) {
 		return nil, fmt.Errorf("error parsing environment variables: %w", err)
 	}
 
-	//TODO change it to something more interestig
+	//TODO change it to something more interesting
 	host, err := os.Hostname()
 	if err != nil {
 		fmt.Println("host unknown")
 	}
+	res.Secret = host
 	fmt.Println("host:", host)
 
 	fmt.Println(res)
@@ -39,7 +40,7 @@ func (c *Config) parseFlags() {
 
 	flag.StringVar(&c.DBURI, "d", "", "Database URI: 'postgresql://postgres:postgres@hostname/postgres?sslmode=disable'")
 
-	flag.StringVar(&c.AccuralSystemAddress, "r", "", "Address of accural system: 'postgresql://postgres:postgres@hostname/postgres?sslmode=disable'")
+	flag.StringVar(&c.AccuralSystemAddress, "r", "", "Address of accural system: http://hostname:port")
 
 	flag.Parse()
 }

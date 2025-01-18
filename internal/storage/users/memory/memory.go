@@ -11,10 +11,10 @@ type Memory struct {
 	DB map[string]*models.UserData
 }
 
-func Init() (*Memory, error) {
+func Init() *Memory {
 	return &Memory{
 		DB: make(map[string]*models.UserData),
-	}, nil
+	}
 }
 
 func (m *Memory) SaveUser(login string, pass string) error {
@@ -40,8 +40,4 @@ func (m *Memory) GetUser(login string) (*models.UserData, error) {
 	}
 
 	return u, nil
-}
-
-func (m *Memory) Close() error {
-	return nil
 }

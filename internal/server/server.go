@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals"
 	"io"
 	"log"
 	"net/http"
@@ -14,8 +12,10 @@ import (
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/api"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/users"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v4"
@@ -26,12 +26,12 @@ const (
 )
 
 type Server struct {
-	address     string
-	usersRepo   users.Storage
-	ordersRepo  orders.Storage
-	balanceRepo balance.Storage
-	witdrawRepo withdrawals.Storage
-	secretKey   string
+	address      string
+	usersRepo    users.Storage
+	ordersRepo   orders.Storage
+	balanceRepo  balance.Storage
+	withdrawRepo withdrawals.Storage
+	secretKey    string
 }
 
 type Claims struct {
@@ -41,12 +41,12 @@ type Claims struct {
 
 func New(address string, usersRepo users.Storage, ordersRepo orders.Storage, balanceRepo balance.Storage, witdrawRepo withdrawals.Storage, secretKey string) *Server {
 	return &Server{
-		address:     address,
-		usersRepo:   usersRepo,
-		ordersRepo:  ordersRepo,
-		balanceRepo: balanceRepo,
-		witdrawRepo: witdrawRepo,
-		secretKey:   secretKey,
+		address:      address,
+		usersRepo:    usersRepo,
+		ordersRepo:   ordersRepo,
+		balanceRepo:  balanceRepo,
+		withdrawRepo: witdrawRepo,
+		secretKey:    secretKey,
 	}
 }
 
@@ -80,12 +80,12 @@ func (s *Server) newRouter() *chi.Mux {
 			router.Get("/", s.authHandler(api.NewGetBalanceHandler(s.balanceRepo).Handle))
 
 			router.Route("/withdraw", func(router chi.Router) {
-				router.Post("/", s.authHandler(api.NewWithdrawHandler(s.balanceRepo, s.ordersRepo).Handle))
+				router.Post("/", s.authHandler(api.NewWithdrawHandler(s.balanceRepo, s.ordersRepo, s.withdrawRepo).Handle))
 			})
 		})
 
 		router.Route("/withdrawals", func(router chi.Router) {
-			router.Get("/", s.authHandler(api.NewWithdrawalsHandler(s.witdrawRepo).Handle))
+			router.Get("/", s.authHandler(api.NewWithdrawalsHandler(s.withdrawRepo).Handle))
 		})
 
 	})

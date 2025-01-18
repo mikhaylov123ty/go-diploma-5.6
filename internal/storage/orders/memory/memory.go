@@ -11,10 +11,10 @@ type Memory struct {
 	DB map[string]*models.OrderData
 }
 
-func Init() (*Memory, error) {
+func Init() *Memory {
 	return &Memory{
 		DB: make(map[string]*models.OrderData),
-	}, nil
+	}
 }
 
 func (m *Memory) CreateOrder(order *models.OrderData) error {
@@ -41,6 +41,20 @@ func (m *Memory) GetOrders(userlogin string) ([]*models.OrderData, error) {
 	return orders, nil
 }
 
+func (m *Memory) GetNewOrders() ([]*models.OrderData, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var newOrders []*models.OrderData
+
+	for _, order := range m.DB {
+		if order.Status == "NEW" {
+			newOrders = append(newOrders, order)
+		}
+	}
+
+	return newOrders, nil
+}
+
 func (m *Memory) GetOrderByID(orderID string) (*models.OrderData, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -57,9 +71,5 @@ func (m *Memory) Update(data *models.OrderData) error {
 	defer m.mu.Unlock()
 	m.DB[data.OrderID] = data
 
-	return nil
-}
-
-func (m *Memory) Close() error {
 	return nil
 }
