@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"net/http"
 )
 
@@ -27,7 +28,7 @@ func NewGetOrdersHandler(ordersProvider ordersGetProvider, userProvider ordersGe
 }
 
 func (h *OrderGetHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	login := r.Context().Value("login").(string)
+	login := r.Context().Value(utils.ContextKey("login")).(string)
 	user, err := h.userProvider.GetUser(login)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -40,13 +41,7 @@ func (h *OrderGetHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resData := make([]*models.OrderData, len(orders))
-
-	for i, order := range orders {
-		resData[i] = order
-	}
-
-	res, err := json.Marshal(resData)
+	res, err := json.Marshal(orders)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return

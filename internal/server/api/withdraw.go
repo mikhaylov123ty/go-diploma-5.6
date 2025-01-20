@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"io"
 	"log"
 	"net/http"
@@ -58,7 +59,7 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userLogin := r.Context().Value("login").(string)
+	userLogin := r.Context().Value(utils.ContextKey("login")).(string)
 	log.Printf("WITHDRAW User login: %s", userLogin)
 
 	order, err := h.orderProvider.GetOrderByID(req.Order)
@@ -118,5 +119,4 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("WITHDRAW order not found: ", err)
 	w.WriteHeader(http.StatusUnprocessableEntity)
-	return
 }

@@ -4,11 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
 	"log"
+	"log/slog"
 	"time"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders"
 
 	"github.com/go-resty/resty/v2"
@@ -41,11 +42,6 @@ func (a *Accrual) Sync() {
 			continue
 		}
 
-		//TODO pass to goworkers
-		if newOrders == nil {
-			log.Println("No new orders")
-			continue
-		}
 		log.Printf("Syncing accrual orders, New Orders: %v", newOrders)
 		for _, order := range newOrders {
 			accrualData, err := a.GetOrderStatus(order.OrderID)
@@ -53,7 +49,7 @@ func (a *Accrual) Sync() {
 				log.Printf("failed get accrural order status: %v", err)
 				continue
 			}
-			log.Printf("Syncing accrual orders, Accrual Data: %v", accrualData)
+			slog.Debug("Syncing accrual orders", slog.Any("Accrual Data", *accrualData))
 			if order.Status != accrualData.Status {
 				userBalanceData, err := a.balanceRepo.GetBalance(order.UserLogin)
 				if err != nil {
@@ -82,7 +78,7 @@ func (a *Accrual) Sync() {
 					continue
 				}
 			}
-
+			log.Println("No new orders")
 		}
 	}
 }

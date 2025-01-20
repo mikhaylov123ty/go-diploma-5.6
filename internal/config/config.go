@@ -11,6 +11,7 @@ type Config struct {
 	DBURI                string
 	AccuralSystemAddress string
 	Secret               string
+	LogLevel             string
 }
 
 func Init() (*Config, error) {
@@ -28,19 +29,18 @@ func Init() (*Config, error) {
 		fmt.Println("host unknown")
 	}
 	res.Secret = host
-	fmt.Println("host:", host)
-
-	fmt.Println(res)
 
 	return res, nil
 }
 
 func (c *Config) parseFlags() {
-	flag.StringVar(&c.Address, "a", ":8080", "Address to listen on")
+	flag.StringVar(&c.Address, "a", ":8080", "Address to listen on. Default: \":8080\"")
 
 	flag.StringVar(&c.DBURI, "d", "", "Database URI: 'postgresql://postgres:postgres@hostname/postgres?sslmode=disable'")
 
 	flag.StringVar(&c.AccuralSystemAddress, "r", "", "Address of accural system: http://hostname:port")
+
+	flag.StringVar(&c.LogLevel, "l", "info", "Log level. Default: info")
 
 	flag.Parse()
 }
@@ -56,6 +56,10 @@ func (c *Config) parseEnvironment() error {
 
 	if os.Getenv("ACCRUAL_SYSTEM_ADDRESS") != "" {
 		c.AccuralSystemAddress = os.Getenv("ACCRUAL_SYSTEM_ADDRESS")
+	}
+
+	if os.Getenv("LOG_LEVEL") != "" {
+		c.LogLevel = os.Getenv("LOG_LEVEL")
 	}
 
 	return nil

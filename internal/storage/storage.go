@@ -48,6 +48,10 @@ func New(dbURI string) (*Storage, error) {
 		}
 
 		driver, err := postgres.WithInstance(conn, &postgres.Config{})
+		if err != nil {
+			return nil, fmt.Errorf("failed create postgres instance: %w", err)
+		}
+
 		m, err := migrate.NewWithDatabaseInstance(
 			"file://"+migrationPath,
 			"postgres", driver)

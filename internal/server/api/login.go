@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"fmt"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"log"
 	"net/http"
 
@@ -29,8 +30,8 @@ func NewAuthHandler(provider userProvider) *AuthHandler {
 }
 
 func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	login := r.Context().Value("login").(string)
-	pass := r.Context().Value("pass").(string)
+	login := r.Context().Value(utils.ContextKey("login")).(string)
+	pass := r.Context().Value(utils.ContextKey("pass")).(string)
 	user, err := h.provider.GetUser(login)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -50,6 +51,6 @@ func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Add("Authorization", r.Context().Value("token").(string))
+	w.Header().Add("Authorization", r.Context().Value(utils.ContextKey("token")).(string))
 	w.WriteHeader(http.StatusOK)
 }

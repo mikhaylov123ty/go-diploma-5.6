@@ -1,7 +1,9 @@
 package main
 
 import (
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/logger"
 	"log"
+	"log/slog"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/config"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server"
@@ -9,12 +11,18 @@ import (
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage"
 )
 
+// TODO logger, retrier, workers pool transactions and graceful shutdown
+
 func main() {
 	//init config
 	cfg, err := config.Init()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed init config: ", err)
 	}
+
+	logger.Init(cfg.LogLevel)
+
+	slog.Info("test")
 
 	//init storage
 	storages, err := storage.New(cfg.DBURI)
@@ -30,9 +38,6 @@ func main() {
 		storages.BalanceRepo,
 	)
 
-	//start processing accrual orders
-	go accrualInstance.Sync()
-
 	//init server
 	serverInstance := server.New(
 		cfg.Address,
@@ -43,8 +48,11 @@ func main() {
 		cfg.Secret,
 	)
 
+	//start processing accrual orders
+	go accrualInstance.Sync()
+
 	//run server
 	if err = serverInstance.Start(); err != nil {
-		log.Fatal(err)
+		log.Fatal("failed start server: ", err)
 	}
 }
