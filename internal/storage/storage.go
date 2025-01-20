@@ -2,8 +2,9 @@ package storage
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	
+
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
 	balanceMemory "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance/memory"
 	balancePostgres "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance/postgres"
@@ -17,7 +18,14 @@ import (
 	withdrawalsMemory "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals/memory"
 	withdrawalsPostgres "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals/postgres"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
+)
+
+const (
+	migrationPath = "./internal/storage/migrations/"
 )
 
 type Storage struct {
@@ -37,6 +45,17 @@ func New(dbURI string) (*Storage, error) {
 
 		if err = conn.Ping(); err != nil {
 			return nil, fmt.Errorf("failed ping db: %w", err)
+		}
+
+		driver, err := postgres.WithInstance(conn, &postgres.Config{})
+		m, err := migrate.NewWithDatabaseInstance(
+			"file://"+migrationPath,
+			"postgres", driver)
+		if err != nil {
+			return nil, fmt.Errorf("failed initialize migrations: %w", err)
+		}
+		if err = m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+			return nil, fmt.Errorf("failed run migration: %w", err)
 		}
 
 		return &Storage{

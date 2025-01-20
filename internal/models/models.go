@@ -12,7 +12,7 @@ type OrderData struct {
 
 type UserData struct {
 	Login string `json:"login"`
-	Pass  string `json:"pass"`
+	Pass  string `json:"pass,omitempty"`
 }
 
 type BalanceData struct {

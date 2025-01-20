@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"io"
@@ -63,7 +64,7 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	order, err := h.orderProvider.GetOrderByID(req.Order)
 	log.Printf("WITHDRAW Order ID: %s", req.Order)
 	if err != nil {
-		if err.Error() != "order not found" {
+		if err != sql.ErrNoRows {
 			log.Printf("error getting order: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -72,7 +73,7 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	if order == nil {
 		balance, err := h.balanceProvider.GetBalance(userLogin)
 		if err != nil {
-			if err.Error() != "user not found" {
+			if err != sql.ErrNoRows {
 				log.Printf("error getting user: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -89,15 +90,9 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		//order.Accrual = req.Sum
 		balance.Current -= req.Sum
 		balance.Withdrawn += req.Sum
 
-		//if err = h.orderProvider.Update(order); err != nil {
-		//	log.Printf("error updating order: %v", err)
-		//	w.WriteHeader(http.StatusInternalServerError)
-		//	return
-		//}
 		if err = h.balanceProvider.Update(balance); err != nil {
 			log.Printf("error updating balance: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -118,6 +113,7 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.WriteHeader(http.StatusOK)
+		return
 	}
 
 	log.Println("WITHDRAW order not found: ", err)

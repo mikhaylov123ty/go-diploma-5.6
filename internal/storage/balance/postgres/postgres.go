@@ -2,7 +2,9 @@ package postgres
 
 import (
 	"database/sql"
-	
+	"fmt"
+	"github.com/Masterminds/squirrel"
+
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 
 	_ "github.com/lib/pq"
@@ -17,16 +19,53 @@ func Init(db *sql.DB) *Postgres {
 }
 
 func (p *Postgres) GetBalance(login string) (*models.BalanceData, error) {
+	query, args, err := squirrel.Select("*").
+		From("balances").
+		Where(squirrel.Eq{"user_login": login}).
+		PlaceholderFormat(squirrel.Dollar).
+		ToSql()
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("QUERY", query, "ARGS", args)
 
-	return &models.BalanceData{}, nil
+	row := p.db.QueryRow(query, args...)
+	if row.Err() != nil {
+		return nil, fmt.Errorf("executing query: %w", err)
+	}
+
+	var res models.BalanceData
+	if err = row.Scan(&res.UserLogin, &res.Current, &res.Withdrawn); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, sql.ErrNoRows
+		}
+		return nil, fmt.Errorf("scanning row: %w", err)
+	}
+
+	return &res, nil
 }
 
-func (P *Postgres) Update(data *models.BalanceData) error {
+func (p *Postgres) Update(data *models.BalanceData) error {
+	query, args, err := squirrel.Insert("balances").
+		Columns("user_login", "current", "withdrawn").
+		Values(data.UserLogin, data.Current, data.Withdrawn).
+		Suffix("ON CONFLICT (user_login) DO UPDATE").
+		Suffix("SET current = $2, withdrawn = $3").
+		PlaceholderFormat(squirrel.Dollar).
+		ToSql()
+	if err != nil {
+		return err
+	}
+	fmt.Println("QUERY", query, "ARGS", args)
 
-	return nil
-}
+	res, err := p.db.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("executing query: %w", err)
+	}
 
-func (p *Postgres) Close() error {
-	p.db.Close()
+	if resAff, _ := res.RowsAffected(); resAff == 0 {
+		return sql.ErrNoRows
+	}
+
 	return nil
 }

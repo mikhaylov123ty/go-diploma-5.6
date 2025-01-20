@@ -1,6 +1,7 @@
 package accrual
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
@@ -45,17 +46,19 @@ func (a *Accrual) Sync() {
 			log.Println("No new orders")
 			continue
 		}
+		log.Printf("Syncing accrual orders, New Orders: %v", newOrders)
 		for _, order := range newOrders {
 			accrualData, err := a.GetOrderStatus(order.OrderID)
 			if err != nil {
-				log.Printf("Error syncing accrual orders: %v", err)
+				log.Printf("failed get accrural order status: %v", err)
 				continue
 			}
+			log.Printf("Syncing accrual orders, Accrual Data: %v", accrualData)
 			if order.Status != accrualData.Status {
 				userBalanceData, err := a.balanceRepo.GetBalance(order.UserLogin)
 				if err != nil {
-					if err.Error() != "user not found" {
-						log.Printf("Error syncing accrual orders: %v", err)
+					if err != sql.ErrNoRows {
+						log.Printf("failed get user balance data: %v", err)
 						continue
 					}
 					userBalanceData = &models.BalanceData{
@@ -85,6 +88,7 @@ func (a *Accrual) Sync() {
 }
 
 func (a *Accrual) GetOrderStatus(orderID string) (*models.AccrualOrders, error) {
+	log.Printf("Getting order status for order: %s", a.address+accrualRoot+orderID)
 	response, err := resty.New().R().Get(a.address + accrualRoot + orderID)
 	if err != nil {
 		log.Printf("Error syncing accrual orders: %v", err)

@@ -1,0 +1,9 @@
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS users(
+    login TEXT PRIMARY KEY NOT NULL,
+    pass TEXT
+
+);
+
+COMMIT;

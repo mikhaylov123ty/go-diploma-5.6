@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"io"
 	"log"
@@ -60,7 +61,7 @@ func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orderCheck, err := h.orderSaver.GetOrderByID(orderID)
-	if err != nil && err.Error() != "order not found" {
+	if err != nil && err != sql.ErrNoRows {
 		log.Println("error get order by id", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -71,7 +72,7 @@ func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
-		
+
 		w.WriteHeader(http.StatusOK)
 		return
 	}

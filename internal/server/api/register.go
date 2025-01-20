@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
 )
@@ -25,7 +26,7 @@ func (h *RegisterHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	if err := h.userRegister.SaveUser(login, pass); err != nil {
 		log.Println(err)
 		//TODO fix error and salt pass
-		if err.Error() == "user already exists" {
+		if err == sql.ErrNoRows {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}

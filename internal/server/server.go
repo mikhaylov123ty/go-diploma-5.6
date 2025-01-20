@@ -182,3 +182,9 @@ func (s *Server) signToken(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r)
 	}
 }
+
+//func (s *Server) logger(next http.HandlerFunc) http.HandlerFunc {
+//	return func(w http.ResponseWriter, r *http.Request) {
+//
+//	}
+//}

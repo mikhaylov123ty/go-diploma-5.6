@@ -1,10 +1,12 @@
 package api
 
 import (
+	"database/sql"
 	"fmt"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"log"
 	"net/http"
+
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 )
 
 type AuthData struct {
@@ -31,7 +33,7 @@ func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	pass := r.Context().Value("pass").(string)
 	user, err := h.provider.GetUser(login)
 	if err != nil {
-		if err.Error() == "user not found" {
+		if err == sql.ErrNoRows {
 			log.Println(err)
 			w.WriteHeader(http.StatusNotFound)
 			return
