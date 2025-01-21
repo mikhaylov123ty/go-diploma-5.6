@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/transactions"
 
 	"log/slog"
 	"net/http"
@@ -31,43 +31,54 @@ type Accrual struct {
 	address     string
 	ordersRepo  orders.Storage
 	balanceRepo balance.Storage
+	transaction transactions.Handler
 }
 
-func NewAccrual(address string, ordersRepo orders.Storage, balanceRepo balance.Storage) *Accrual {
+func NewAccrual(
+	address string,
+	ordersRepo orders.Storage,
+	balanceRepo balance.Storage,
+	transaction transactions.Handler) *Accrual {
 	return &Accrual{
 		address:     address,
 		ordersRepo:  ordersRepo,
 		balanceRepo: balanceRepo,
+		transaction: transaction,
 	}
 }
 
 func (a *Accrual) Sync() {
 	jobs := make(chan *models.OrderData)
 	res := make(chan *utils.WorkersResponse)
-	i := 0
 
 	for range workersPool {
-		i++
-		log.Print("starting worker: ", i)
-		go a.worker(jobs, res)
+		go a.SyncWorker(jobs, res)
 	}
 
 	for {
-		log.Print("starting sync next loop")
+		slog.Debug("accrual sync start loop")
 		ctx := context.Background()
 		time.Sleep(syncInterval)
+
+		if err := a.transaction.Begin(); err != nil {
+			slog.Error("accrual transaction begin err", slog.String("error", err.Error()))
+			continue
+		}
 
 		newOrders, err := a.ordersRepo.GetNew(ctx)
 		if err != nil {
 			slog.Error("accrual sync", slog.String("method", "getNewOrders"), slog.String("error", err.Error()))
 			continue
 		}
+
+		if err := a.transaction.Commit(); err != nil {
+			slog.Error("accrual transaction commit err", slog.String("error", err.Error()))
+		}
+
 		if len(newOrders) < 1 {
 			slog.Info("accrual sync. no new orders in orders repo")
 			continue
 		}
-
-		//todo worker pool for parallel orders handle
 
 		slog.Debug("accrual sync", slog.Any("new_orders", newOrders))
 
@@ -77,9 +88,7 @@ func (a *Accrual) Sync() {
 			}
 		}(newOrders)
 
-		// Чтение результатов из результирующего канала по количеству заданий(горутин в цикле)
-
-		log.Print("starting reading res chan")
+		// Чтение результатов из результирующего канала
 		for range len(newOrders) {
 			r := <-res
 			if r.Err != nil {
@@ -116,17 +125,18 @@ func withRetry(f func(string) (*models.AccrualOrders, error)) func(string) (*mod
 			if err == nil {
 				return res, nil
 			}
-			slog.Warn("failed get accrual order status, will retry in 5 seconds", slog.String("error", err.Error()))
+			slog.Warn("failed get accrual order status, will retry in 2 seconds", slog.String("error", err.Error()))
 			time.Sleep(retryDelay)
 		}
 		return nil, fmt.Errorf("timed out")
 	}
 }
 
-func (a *Accrual) worker(jobs <-chan *models.OrderData, results chan<- *utils.WorkersResponse) {
+func (a *Accrual) SyncWorker(jobs <-chan *models.OrderData, results chan<- *utils.WorkersResponse) {
 	for order := range jobs {
 		ctx := context.Background()
 		res := &utils.WorkersResponse{}
+
 		accrualData, err := withRetry(a.GetOrderStatus)(order.OrderID)
 		if err != nil {
 			slog.Error("accrual sync", slog.String("method", "getOrderStatus"), slog.String("error", err.Error()))
@@ -143,10 +153,18 @@ func (a *Accrual) worker(jobs <-chan *models.OrderData, results chan<- *utils.Wo
 		slog.Debug("accrual sync", slog.Any("accrual_data", *accrualData))
 
 		if order.Status != accrualData.Status {
+			if err = a.transaction.Begin(); err != nil {
+				slog.Error("accrual transaction begin err", slog.String("error", err.Error()))
+				res.Err = err
+				results <- res
+				continue
+			}
+
 			userBalanceData, err := a.balanceRepo.GetByLogin(ctx, order.UserLogin)
 			if err != nil {
 				slog.Error("accrual sync", slog.String("method", "getBalance"), slog.String("error", err.Error()))
 				if err != sql.ErrNoRows {
+					_ = a.transaction.Rollback()
 					res.Err = err
 					results <- res
 					continue
@@ -163,13 +181,22 @@ func (a *Accrual) worker(jobs <-chan *models.OrderData, results chan<- *utils.Wo
 
 			if err = a.ordersRepo.Update(ctx, order); err != nil {
 				slog.Error("accrual sync", slog.String("method", "ordersRepo.Update"), slog.String("error", err.Error()))
+				_ = a.transaction.Rollback()
 				res.Err = err
 				results <- res
 				continue
 			}
 
 			if err = a.balanceRepo.Update(ctx, userBalanceData); err != nil {
+				_ = a.transaction.Rollback()
 				slog.Error("accrual sync", slog.String("method", "balanceRepo.Update"), slog.String("error", err.Error()))
+				res.Err = err
+				results <- res
+				continue
+			}
+
+			if err = a.transaction.Commit(); err != nil {
+				slog.Error("accural sync failed commit transaction", slog.String("error", err.Error()))
 				res.Err = err
 				results <- res
 				continue
@@ -180,6 +207,5 @@ func (a *Accrual) worker(jobs <-chan *models.OrderData, results chan<- *utils.Wo
 
 			results <- res
 		}
-		slog.Debug("accrual sync. no new orders processed in accrual repo")
 	}
 }

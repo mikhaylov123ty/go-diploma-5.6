@@ -11,8 +11,9 @@ import (
 )
 
 type OrdersGetHandler struct {
-	ordersProvider ordersGetProvider
-	userProvider   ordersGetUserProvider
+	ordersProvider      ordersGetProvider
+	userProvider        ordersGetUserProvider
+	transactionsHandler transactionsHandler
 }
 
 type ordersGetProvider interface {
@@ -23,10 +24,11 @@ type ordersGetUserProvider interface {
 	GetByLogin(context.Context, string) (*models.UserData, error)
 }
 
-func NewGetOrdersHandler(ordersProvider ordersGetProvider, userProvider ordersGetUserProvider) *OrdersGetHandler {
+func NewGetOrdersHandler(ordersProvider ordersGetProvider, userProvider ordersGetUserProvider, transactionsHandler transactionsHandler) *OrdersGetHandler {
 	return &OrdersGetHandler{
 		ordersProvider,
 		userProvider,
+		transactionsHandler,
 	}
 }
 
@@ -37,9 +39,16 @@ func (h *OrdersGetHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	
+	if err := h.transactionsHandler.Begin(); err != nil {
+		slog.ErrorContext(r.Context(), "get orders handler", slog.String("error", err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	user, err := h.userProvider.GetByLogin(r.Context(), login)
 	if err != nil {
+		_ = h.transactionsHandler.Rollback()
 		slog.ErrorContext(r.Context(), "get orders handler", slog.String("method", "getUser"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -47,8 +56,15 @@ func (h *OrdersGetHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	orders, err := h.ordersProvider.GetByLogin(r.Context(), user.Login)
 	if err != nil {
+		_ = h.transactionsHandler.Rollback()
 		slog.ErrorContext(r.Context(), "get orders handler", slog.String("method", "getOrders"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if err = h.transactionsHandler.Commit(); err != nil {
+		slog.ErrorContext(r.Context(), "get orders handler", slog.String("error", err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 

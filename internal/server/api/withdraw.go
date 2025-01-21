@@ -17,10 +17,12 @@ type WithdrawRequest struct {
 	Order string  `json:"order"`
 	Sum   float64 `json:"sum"`
 }
+
 type WithdrawHandler struct {
-	balanceProvider  balanceProvider
-	orderProvider    orderProvider
-	withdrawProvider withdrawProvider
+	balanceProvider     balanceProvider
+	orderProvider       orderProvider
+	withdrawProvider    withdrawProvider
+	transactionsHandler transactionsHandler
 }
 
 type balanceProvider interface {
@@ -37,11 +39,16 @@ type withdrawProvider interface {
 	Update(context.Context, *models.WithdrawData) error
 }
 
-func NewWithdrawHandler(balanceProvider balanceProvider, orderProvider orderProvider, withdrawProvider withdrawProvider) *WithdrawHandler {
+func NewWithdrawHandler(
+	balanceProvider balanceProvider,
+	orderProvider orderProvider,
+	withdrawProvider withdrawProvider,
+	transactionsHandler transactionsHandler) *WithdrawHandler {
 	return &WithdrawHandler{
-		balanceProvider:  balanceProvider,
-		orderProvider:    orderProvider,
-		withdrawProvider: withdrawProvider,
+		balanceProvider:     balanceProvider,
+		orderProvider:       orderProvider,
+		withdrawProvider:    withdrawProvider,
+		transactionsHandler: transactionsHandler,
 	}
 }
 
@@ -73,8 +80,15 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err = h.transactionsHandler.Begin(); err != nil {
+		slog.ErrorContext(r.Context(), "withdraw handler", slog.String("error", err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	order, err := h.orderProvider.GetByID(r.Context(), req.Order)
 	if err != nil && err != sql.ErrNoRows {
+		_ = h.transactionsHandler.Rollback()
 		slog.ErrorContext(r.Context(), "withdraw handler",
 			slog.String("method", "getOrderByID"),
 			slog.String("error", err.Error()))
@@ -88,6 +102,7 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	if order == nil {
 		balance, err := h.balanceProvider.GetByLogin(r.Context(), login)
 		if err != nil {
+			_ = h.transactionsHandler.Rollback()
 			slog.ErrorContext(r.Context(), "withdraw handler",
 				slog.String("method", "getBalance"),
 				slog.String("error", err.Error()))
@@ -100,9 +115,11 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+
 		slog.DebugContext(r.Context(), "withdraw handler", slog.Any("balance", balance))
 
 		if balance.Current < req.Sum {
+			_ = h.transactionsHandler.Rollback()
 			slog.DebugContext(r.Context(), "withdraw handler", slog.Any("balance is too low", balance.Current))
 			w.WriteHeader(http.StatusPaymentRequired)
 			return
@@ -112,6 +129,7 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		balance.Withdrawn += req.Sum
 
 		if err = h.balanceProvider.Update(r.Context(), balance); err != nil {
+			_ = h.transactionsHandler.Rollback()
 			slog.ErrorContext(r.Context(), "withdraw handler",
 				slog.String("method", "balanceProvider.Update"),
 				slog.String("error", err.Error()))
@@ -127,9 +145,16 @@ func (h *WithdrawHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err = h.withdrawProvider.Update(r.Context(), withdrawData); err != nil {
+			_ = h.transactionsHandler.Rollback()
 			slog.ErrorContext(r.Context(), "withdraw handler",
 				slog.String("method", "withdrawProvider.Update"),
 				slog.String("error", err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if err = h.transactionsHandler.Commit(); err != nil {
+			slog.ErrorContext(r.Context(), "withdraw handler", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

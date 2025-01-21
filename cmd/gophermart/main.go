@@ -1,15 +1,16 @@
 package main
 
 import (
+	"log"
+
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/config"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/logger"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/accrual"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage"
-	"log"
 )
 
-// TODO workers pool, transactions and graceful shutdown, salt passes gomock
+// TODO  graceful shutdown, salt passes gomock
 
 func main() {
 	//init config
@@ -32,11 +33,13 @@ func main() {
 		cfg.AccuralSystemAddress,
 		storages.OrdersRepo,
 		storages.BalanceRepo,
+		storages.Transactions,
 	)
 
 	//init server
 	serverInstance := server.New(
 		cfg.Address,
+		storages.Transactions,
 		storages.UsersRepo,
 		storages.OrdersRepo,
 		storages.BalanceRepo,

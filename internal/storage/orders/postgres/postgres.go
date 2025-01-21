@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
+
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+
 	"github.com/Masterminds/squirrel"
 	_ "github.com/lib/pq"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
-	"log/slog"
 )
 
 type Postgres struct {

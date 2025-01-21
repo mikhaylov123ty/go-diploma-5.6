@@ -5,8 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/transactions"
 	"io"
 	"log"
 	"log/slog"
@@ -20,9 +19,11 @@ import (
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/users"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
 )
 
 const (
@@ -31,6 +32,7 @@ const (
 
 type Server struct {
 	address      string
+	transactions transactions.Handler
 	usersRepo    users.Storage
 	ordersRepo   orders.Storage
 	balanceRepo  balance.Storage
@@ -45,6 +47,7 @@ type Claims struct {
 
 func New(
 	address string,
+	transactions transactions.Handler,
 	usersRepo users.Storage,
 	ordersRepo orders.Storage,
 	balanceRepo balance.Storage,
@@ -52,6 +55,7 @@ func New(
 	secretKey string) *Server {
 	return &Server{
 		address:      address,
+		transactions: transactions,
 		usersRepo:    usersRepo,
 		ordersRepo:   ordersRepo,
 		balanceRepo:  balanceRepo,
@@ -74,28 +78,28 @@ func (s *Server) newRouter() *chi.Mux {
 	router.Route(userHandlerPath, func(router chi.Router) {
 
 		router.Route("/register", func(router chi.Router) {
-			router.Post("/", s.signToken(api.NewRegisterHandler(s.usersRepo).Handle))
+			router.Post("/", s.signToken(api.NewRegisterHandler(s.usersRepo, s.transactions).Handle))
 		})
 
 		router.Route("/login", func(router chi.Router) {
-			router.Post("/", s.signToken(api.NewAuthHandler(s.usersRepo).Handle))
+			router.Post("/", s.signToken(api.NewAuthHandler(s.usersRepo, s.transactions).Handle))
 		})
 
 		router.Route("/orders", func(router chi.Router) {
-			router.Post("/", s.authHandler(api.NewPostOrdersHandler(s.ordersRepo, s.usersRepo).Handle))
-			router.Get("/", s.authHandler(api.NewGetOrdersHandler(s.ordersRepo, s.usersRepo).Handle))
+			router.Post("/", s.authHandler(api.NewPostOrdersHandler(s.ordersRepo, s.usersRepo, s.transactions).Handle))
+			router.Get("/", s.authHandler(api.NewGetOrdersHandler(s.ordersRepo, s.usersRepo, s.transactions).Handle))
 		})
 
 		router.Route("/balance", func(router chi.Router) {
-			router.Get("/", s.authHandler(api.NewGetBalanceHandler(s.balanceRepo).Handle))
+			router.Get("/", s.authHandler(api.NewGetBalanceHandler(s.balanceRepo, s.transactions).Handle))
 
 			router.Route("/withdraw", func(router chi.Router) {
-				router.Post("/", s.authHandler(api.NewWithdrawHandler(s.balanceRepo, s.ordersRepo, s.withdrawRepo).Handle))
+				router.Post("/", s.authHandler(api.NewWithdrawHandler(s.balanceRepo, s.ordersRepo, s.withdrawRepo, s.transactions).Handle))
 			})
 		})
 
 		router.Route("/withdrawals", func(router chi.Router) {
-			router.Get("/", s.authHandler(api.NewWithdrawalsHandler(s.withdrawRepo).Handle))
+			router.Get("/", s.authHandler(api.NewWithdrawalsHandler(s.withdrawRepo, s.transactions).Handle))
 		})
 
 	})
