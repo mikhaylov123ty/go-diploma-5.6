@@ -1,8 +1,10 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 
@@ -17,7 +19,7 @@ func Init(db *sql.DB) *Postgres {
 	return &Postgres{db: db}
 }
 
-func (p *Postgres) Update(data *models.WithdrawData) error {
+func (p *Postgres) Update(ctx context.Context, data *models.WithdrawData) error {
 	query, args, err := squirrel.Insert("withdrawals").
 		Columns("order_id", "user_login", "sum", "processed_at").
 		Values(data.Order, data.UserLogin, data.Sum, data.ProcessedAt).
@@ -28,7 +30,8 @@ func (p *Postgres) Update(data *models.WithdrawData) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+
+	slog.DebugContext(ctx, "Update Withdrawals", slog.String("query", query), slog.Any("args", args))
 
 	res, err := p.db.Exec(query, args...)
 	if err != nil {
@@ -42,7 +45,7 @@ func (p *Postgres) Update(data *models.WithdrawData) error {
 	return nil
 }
 
-func (p *Postgres) Get(login string) ([]*models.WithdrawData, error) {
+func (p *Postgres) GetByLogin(ctx context.Context, login string) ([]*models.WithdrawData, error) {
 	query, args, err := squirrel.Select("*").
 		From("withdrawals").
 		Where(squirrel.Eq{"user_login": login}).
@@ -52,7 +55,8 @@ func (p *Postgres) Get(login string) ([]*models.WithdrawData, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+
+	slog.DebugContext(ctx, "Get New Orders", slog.String("query", query), slog.Any("args", args))
 
 	rows, err := p.db.Query(query, args...)
 	if err != nil {

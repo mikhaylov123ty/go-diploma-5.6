@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"fmt"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"sync"
@@ -17,7 +18,7 @@ func Init() *Memory {
 	}
 }
 
-func (m *Memory) SaveUser(login string, pass string) error {
+func (m *Memory) Save(ctx context.Context, login string, pass string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -33,7 +34,7 @@ func (m *Memory) SaveUser(login string, pass string) error {
 	return nil
 }
 
-func (m *Memory) GetUser(login string) (*models.UserData, error) {
+func (m *Memory) GetByLogin(ctx context.Context, login string) (*models.UserData, error) {
 	u, ok := m.DB[login]
 	if !ok {
 		return nil, fmt.Errorf("user not found")

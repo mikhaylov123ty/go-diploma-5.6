@@ -26,7 +26,7 @@ func Init() (*Config, error) {
 	//TODO change it to something more interesting
 	host, err := os.Hostname()
 	if err != nil {
-		fmt.Println("host unknown")
+		return nil, fmt.Errorf("error getting hostname: %w", err)
 	}
 	res.Secret = host
 

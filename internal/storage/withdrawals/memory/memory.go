@@ -1,8 +1,10 @@
 package memory
 
 import (
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"context"
 	"sync"
+
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 )
 
 type Memory struct {
@@ -16,7 +18,7 @@ func Init() *Memory {
 	}
 }
 
-func (m *Memory) Update(withdraw *models.WithdrawData) error {
+func (m *Memory) Update(ctx context.Context, withdraw *models.WithdrawData) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -25,7 +27,7 @@ func (m *Memory) Update(withdraw *models.WithdrawData) error {
 	return nil
 }
 
-func (m *Memory) Get(userlogin string) ([]*models.WithdrawData, error) {
+func (m *Memory) GetByLogin(ctx context.Context, userlogin string) ([]*models.WithdrawData, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

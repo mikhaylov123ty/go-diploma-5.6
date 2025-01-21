@@ -1,8 +1,10 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 
@@ -17,7 +19,7 @@ func Init(db *sql.DB) *Postgres {
 	return &Postgres{db: db}
 }
 
-func (p *Postgres) SaveUser(login string, pass string) error {
+func (p *Postgres) Save(ctx context.Context, login string, pass string) error {
 	query, args, err := squirrel.Insert("users").Columns("login", "pass").
 		Values(login, pass).Suffix("ON CONFLICT (login) DO NOTHING").
 		PlaceholderFormat(squirrel.Dollar).
@@ -25,7 +27,8 @@ func (p *Postgres) SaveUser(login string, pass string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+
+	slog.DebugContext(ctx, "Save User", slog.String("query", query), slog.Any("args", args))
 
 	res, err := p.db.Exec(query, args...)
 	if err != nil {
@@ -39,7 +42,7 @@ func (p *Postgres) SaveUser(login string, pass string) error {
 	return nil
 }
 
-func (p *Postgres) GetUser(login string) (*models.UserData, error) {
+func (p *Postgres) GetByLogin(ctx context.Context, login string) (*models.UserData, error) {
 	query, args, err := squirrel.Select("*").
 		From("users").
 		Where(squirrel.Eq{"login": login}).
@@ -48,7 +51,7 @@ func (p *Postgres) GetUser(login string) (*models.UserData, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+	slog.DebugContext(ctx, "Get User By Login", slog.String("query", query), slog.Any("args", args))
 
 	row := p.db.QueryRow(query, args...)
 	if row.Err() != nil {

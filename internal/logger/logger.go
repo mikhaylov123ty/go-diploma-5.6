@@ -2,11 +2,13 @@ package logger
 
 import (
 	"context"
-	"github.com/google/uuid"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"log/slog"
 	"os"
 	"strings"
+
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
+
+	"github.com/google/uuid"
 )
 
 type customLogger struct {

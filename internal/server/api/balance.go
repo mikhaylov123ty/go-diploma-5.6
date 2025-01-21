@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -18,7 +20,7 @@ type BalanceHandler struct {
 }
 
 type balanceGetUserProvider interface {
-	GetBalance(string) (*models.BalanceData, error)
+	GetByLogin(context.Context, string) (*models.BalanceData, error)
 }
 
 func NewGetBalanceHandler(balanceProvider balanceGetUserProvider) *BalanceHandler {
@@ -28,14 +30,20 @@ func NewGetBalanceHandler(balanceProvider balanceGetUserProvider) *BalanceHandle
 }
 
 func (h *BalanceHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	balance, err := h.balanceProvider.GetBalance(r.Context().Value(utils.ContextKey("login")).(string))
+	login := r.Context().Value(utils.ContextKey("login")).(string)
+	if login == "" {
+		slog.ErrorContext(r.Context(), "balance handler. empty login")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	balance, err := h.balanceProvider.GetByLogin(r.Context(), login)
 	if err != nil {
-		if err.Error() != "user not found" {
-			log.Printf("error getting user: %v", err)
+		slog.ErrorContext(r.Context(), "balance handler", slog.String("method", "get balance"), slog.String("error", err.Error()))
+		if err != sql.ErrNoRows {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		log.Println(err)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -46,6 +54,7 @@ func (h *BalanceHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	res, err := json.Marshal(resData)
 	if err != nil {
+		slog.ErrorContext(r.Context(), "balance handler", slog.String("method", "marshal response data"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

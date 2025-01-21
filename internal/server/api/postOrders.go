@@ -1,11 +1,12 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -16,12 +17,12 @@ type OrderPostHandler struct {
 }
 
 type ordersPostSaver interface {
-	CreateOrder(*models.OrderData) error
-	GetOrderByID(string) (*models.OrderData, error)
+	Create(context.Context, *models.OrderData) error
+	GetByID(context.Context, string) (*models.OrderData, error)
 }
 
 type ordersPostUserProvider interface {
-	GetUser(string) (*models.UserData, error)
+	GetByLogin(context.Context, string) (*models.UserData, error)
 }
 
 func NewPostOrdersHandler(orderSaver ordersPostSaver, userProvider ordersPostUserProvider) *OrderPostHandler {
@@ -34,42 +35,49 @@ func NewPostOrdersHandler(orderSaver ordersPostSaver, userProvider ordersPostUse
 func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Println("ERROR READ BODY", err)
+		slog.ErrorContext(r.Context(), "order post handler", slog.String("method", "read_body"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
 
 	login := r.Context().Value(utils.ContextKey("login")).(string)
+	if login == "" {
+		slog.ErrorContext(r.Context(), "order post handler. empty login")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-	user, err := h.userProvider.GetUser(login)
+	user, err := h.userProvider.GetByLogin(r.Context(), login)
 	if err != nil {
+		slog.ErrorContext(r.Context(), "order post handler", slog.String("method", "getUser"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if user == nil {
+		slog.DebugContext(r.Context(), "order post handler", slog.String("method", "user_nill_check"), slog.Bool("is nill", false))
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
 	orderID := string(body)
-	log.Println("POST ORDER POST", orderID)
-
 	if !checkLuhn(orderID) {
+		slog.DebugContext(r.Context(), "order post handler", slog.String("method", "Luhn_order_check"), slog.Bool("is ok", false))
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
 
-	orderCheck, err := h.orderSaver.GetOrderByID(orderID)
+	orderCheck, err := h.orderSaver.GetByID(r.Context(), orderID)
 	if err != nil && err != sql.ErrNoRows {
-		log.Println("error get order by id", err)
+		slog.ErrorContext(r.Context(), "order post handler", slog.String("method", "getOrderByID"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if orderCheck != nil {
 		if orderCheck.UserLogin != user.Login {
+			slog.DebugContext(r.Context(), "order post handler", slog.String("method", "user_check"), slog.Bool("is ok", false))
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
@@ -85,13 +93,13 @@ func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		UploadedAt: time.Now(),
 	}
 
-	if err = h.orderSaver.CreateOrder(order); err != nil {
-		log.Println("ERROR CREATE ORDER", err)
+	if err = h.orderSaver.Create(r.Context(), order); err != nil {
+		slog.ErrorContext(r.Context(), "order post handler", slog.String("method", "createOrder"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	log.Println("CREATED ORDER", orderID)
+	slog.DebugContext(r.Context(), "order post handler", slog.Any("created_order", order))
 
 	w.WriteHeader(http.StatusAccepted)
 }

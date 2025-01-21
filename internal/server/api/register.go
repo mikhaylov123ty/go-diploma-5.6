@@ -1,38 +1,41 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
-	"log"
 	"log/slog"
 	"net/http"
 )
 
 type RegisterHandler struct {
-	userRegister userRegister
+	userSaver registerUserSaver
 }
 
-type userRegister interface {
-	SaveUser(string, string) error
+type registerUserSaver interface {
+	Save(context.Context, string, string) error
 }
 
-func NewRegisterHandler(userRegister userRegister) *RegisterHandler {
+func NewRegisterHandler(userSaver registerUserSaver) *RegisterHandler {
 	return &RegisterHandler{
-		userRegister,
+		userSaver,
 	}
 }
 
 func (h *RegisterHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	login := r.Context().Value(utils.ContextKey("login")).(string)
 	pass := r.Context().Value(utils.ContextKey("pass")).(string)
-	slog.DebugContext(r.Context(), "context login and pass", slog.String("login", login), slog.String("pass", pass))
-	if err := h.userRegister.SaveUser(login, pass); err != nil {
-		log.Println(err)
-		//TODO fix error and salt pass
+
+	//TODO fix error and salt pass
+
+	slog.DebugContext(r.Context(), "register handler", slog.String("login", login), slog.String("pass", pass))
+	if err := h.userSaver.Save(r.Context(), login, pass); err != nil {
+		slog.ErrorContext(r.Context(), "register handler", slog.String("method", "saveUser"), slog.String("error", err.Error()))
 		if err == sql.ErrNoRows {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
+
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}

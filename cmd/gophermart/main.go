@@ -1,17 +1,15 @@
 package main
 
 import (
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/logger"
-	"log"
-	"log/slog"
-
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/config"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/logger"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/accrual"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage"
+	"log"
 )
 
-// TODO logger, retrier, workers pool transactions and graceful shutdown
+// TODO workers pool, transactions and graceful shutdown, salt passes
 
 func main() {
 	//init config
@@ -21,8 +19,6 @@ func main() {
 	}
 
 	logger.Init(cfg.LogLevel)
-
-	slog.Info("test")
 
 	//init storage
 	storages, err := storage.New(cfg.DBURI)

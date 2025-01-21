@@ -4,7 +4,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
@@ -108,13 +107,16 @@ func (s *Server) authHandler(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
+			slog.WarnContext(r.Context(), "auth handler empty")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		claims, err := s.parseToken(authHeader)
+		claims, err := s.parseToken(r.Context(), authHeader)
 		if err != nil {
-			log.Println(err)
+			slog.ErrorContext(r.Context(), "auth handler",
+				slog.String("method", "parse tokent"),
+				slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -126,7 +128,7 @@ func (s *Server) authHandler(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (s *Server) parseToken(tokenString string) (*Claims, error) {
+func (s *Server) parseToken(ctx context.Context, tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -135,18 +137,19 @@ func (s *Server) parseToken(tokenString string) (*Claims, error) {
 		return []byte(s.secretKey), nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse token: %w", err)
 	}
 
 	if !token.Valid {
-		return nil, errors.New("invalid token")
+		return nil, fmt.Errorf("invalid token")
 	}
 
 	if claims.ExpiresAt.Before(time.Now()) {
-		return nil, errors.New("token expired")
+		return nil, fmt.Errorf("token is expired")
 	}
 
-	fmt.Println("Claims", claims)
+	slog.DebugContext(ctx, "parse token", slog.Any("claims", claims))
+
 	return claims, nil
 }
 
@@ -155,7 +158,9 @@ func (s *Server) signToken(next http.HandlerFunc) http.HandlerFunc {
 		data := &models.UserData{}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			log.Println("read body error", err)
+			slog.ErrorContext(r.Context(), "sign token",
+				slog.String("method", "read body"),
+				slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

@@ -1,9 +1,11 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"github.com/Masterminds/squirrel"
+	"log/slog"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 
@@ -18,7 +20,7 @@ func Init(db *sql.DB) *Postgres {
 	return &Postgres{db: db}
 }
 
-func (p *Postgres) GetBalance(login string) (*models.BalanceData, error) {
+func (p *Postgres) GetByLogin(ctx context.Context, login string) (*models.BalanceData, error) {
 	query, args, err := squirrel.Select("*").
 		From("balances").
 		Where(squirrel.Eq{"user_login": login}).
@@ -27,7 +29,8 @@ func (p *Postgres) GetBalance(login string) (*models.BalanceData, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+
+	slog.DebugContext(ctx, "Get Balance", slog.String("query", query), slog.Any("args", args))
 
 	row := p.db.QueryRow(query, args...)
 	if row.Err() != nil {
@@ -45,7 +48,7 @@ func (p *Postgres) GetBalance(login string) (*models.BalanceData, error) {
 	return &res, nil
 }
 
-func (p *Postgres) Update(data *models.BalanceData) error {
+func (p *Postgres) Update(ctx context.Context, data *models.BalanceData) error {
 	query, args, err := squirrel.Insert("balances").
 		Columns("user_login", "current", "withdrawn").
 		Values(data.UserLogin, data.Current, data.Withdrawn).
@@ -56,7 +59,8 @@ func (p *Postgres) Update(data *models.BalanceData) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+
+	slog.DebugContext(ctx, "Update Balance", slog.String("query", query), slog.Any("args", args))
 
 	res, err := p.db.Exec(query, args...)
 	if err != nil {

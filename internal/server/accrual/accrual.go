@@ -1,10 +1,10 @@
 package accrual
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"time"
 
@@ -35,32 +35,36 @@ func NewAccrual(address string, ordersRepo orders.Storage, balanceRepo balance.S
 
 func (a *Accrual) Sync() {
 	for {
+		ctx := context.Background()
 		time.Sleep(5 * time.Second)
-		newOrders, err := a.ordersRepo.GetNewOrders()
+		
+		newOrders, err := a.ordersRepo.GetNew(ctx)
 		if err != nil {
-			log.Printf("Error syncing accrual orders: %v", err)
+			slog.Error("accrual sync", slog.String("method", "getNewOrders"), slog.String("error", err.Error()))
 			continue
 		}
 
-		log.Printf("Syncing accrual orders, New Orders: %v", newOrders)
+		slog.Debug("accrual sync", slog.Any("new_orders", newOrders))
+
 		for _, order := range newOrders {
-			accrualData, err := a.GetOrderStatus(order.OrderID)
+			accrualData, err := withRetry(a.GetOrderStatus)(order.OrderID)
 			if err != nil {
-				log.Printf("failed get accrural order status: %v", err)
+				slog.Error("accrual sync", slog.String("method", "getOrderStatus"), slog.String("error", err.Error()))
 				continue
 			}
-			slog.Debug("Syncing accrual orders", slog.Any("Accrual Data", *accrualData))
+
+			slog.Debug("accrual sync", slog.Any("accrual_data", *accrualData))
+
 			if order.Status != accrualData.Status {
-				userBalanceData, err := a.balanceRepo.GetBalance(order.UserLogin)
+				userBalanceData, err := a.balanceRepo.GetByLogin(ctx, order.UserLogin)
 				if err != nil {
+					slog.Error("accrual sync", slog.String("method", "getBalance"), slog.String("error", err.Error()))
 					if err != sql.ErrNoRows {
-						log.Printf("failed get user balance data: %v", err)
 						continue
 					}
+
 					userBalanceData = &models.BalanceData{
 						UserLogin: order.UserLogin,
-						Current:   0,
-						Withdrawn: 0,
 					}
 				}
 
@@ -68,34 +72,45 @@ func (a *Accrual) Sync() {
 				order.Accrual = accrualData.Accrual
 				userBalanceData.Current += accrualData.Accrual
 
-				if err = a.ordersRepo.Update(order); err != nil {
-					log.Printf("Error saving accrual orders: %v", err)
+				if err = a.ordersRepo.Update(ctx, order); err != nil {
+					slog.Error("accrual sync", slog.String("method", "ordersRepo.Update"), slog.String("error", err.Error()))
 					continue
 				}
 
-				if err = a.balanceRepo.Update(userBalanceData); err != nil {
-					log.Printf("Error saving accrual orders: %v", err)
+				if err = a.balanceRepo.Update(ctx, userBalanceData); err != nil {
+					slog.Error("accrual sync", slog.String("method", "balanceRepo.Update"), slog.String("error", err.Error()))
 					continue
 				}
 			}
-			log.Println("No new orders")
+			slog.Debug("accrual sync. no new orders")
 		}
 	}
 }
 
 func (a *Accrual) GetOrderStatus(orderID string) (*models.AccrualOrders, error) {
-	log.Printf("Getting order status for order: %s", a.address+accrualRoot+orderID)
 	response, err := resty.New().R().Get(a.address + accrualRoot + orderID)
 	if err != nil {
-		log.Printf("Error syncing accrual orders: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed make request: %s", err.Error())
 	}
-	fmt.Println("RESPONSE BODY", response.Body())
+
 	accrual := models.AccrualOrders{}
 
 	if err = json.Unmarshal(response.Body(), &accrual); err != nil {
-		log.Printf("Error unmarshaling accrual orders: %v", err)
+		return nil, fmt.Errorf("failed unmarshal request body: %s", err.Error())
 	}
-	fmt.Println(accrual)
+
 	return &accrual, nil
+}
+
+func withRetry(f func(string) (*models.AccrualOrders, error)) func(string) (*models.AccrualOrders, error) {
+	return func(s string) (*models.AccrualOrders, error) {
+		for range 5 {
+			if res, err := f(s); err == nil {
+				return res, nil
+			}
+			slog.Warn("failed get accrual order status, will retry in 5 seconds")
+			time.Sleep(5 * time.Second)
+		}
+		return nil, fmt.Errorf("timed out")
+	}
 }

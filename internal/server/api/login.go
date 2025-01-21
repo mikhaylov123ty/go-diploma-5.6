@@ -1,10 +1,10 @@
 package api
 
 import (
+	"context"
 	"database/sql"
-	"fmt"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
@@ -16,36 +16,34 @@ type AuthData struct {
 }
 
 type AuthHandler struct {
-	provider userProvider
+	userProvider loginUserProvider
 }
 
-type userProvider interface {
-	GetUser(string) (*models.UserData, error)
+type loginUserProvider interface {
+	GetByLogin(context.Context, string) (*models.UserData, error)
 }
 
-func NewAuthHandler(provider userProvider) *AuthHandler {
+func NewAuthHandler(userProvider loginUserProvider) *AuthHandler {
 	return &AuthHandler{
-		provider,
+		userProvider,
 	}
 }
 
 func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	login := r.Context().Value(utils.ContextKey("login")).(string)
 	pass := r.Context().Value(utils.ContextKey("pass")).(string)
-	user, err := h.provider.GetUser(login)
+	user, err := h.userProvider.GetByLogin(r.Context(), login)
 	if err != nil {
+		slog.ErrorContext(r.Context(), "auth handler", slog.String("method", "getUser"), slog.String("error", err.Error()))
 		if err == sql.ErrNoRows {
-			log.Println(err)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		log.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	fmt.Println(user)
-
+	slog.DebugContext(r.Context(), "auth handler", slog.String("method", "getUser"), slog.Any("user", user))
 	if user.Pass != "" && user.Pass != pass {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
