@@ -164,9 +164,9 @@ func (a *Accrual) SyncWorker(jobs <-chan *models.OrderData, results chan<- *util
 
 			userBalanceData, err := a.balanceRepo.GetByLogin(ctx, order.UserLogin)
 			if err != nil {
-				slog.Error("accrual sync", slog.String("method", "getBalance"), slog.String("error", err.Error()))
 				if err != sql.ErrNoRows {
 					_ = a.transaction.Rollback()
+					slog.Error("accrual sync", slog.String("method", "getBalance"), slog.String("error", err.Error()))
 					res.Err = err
 					results <- res
 
