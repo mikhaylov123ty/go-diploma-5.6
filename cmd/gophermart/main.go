@@ -9,7 +9,7 @@ import (
 	"log"
 )
 
-// TODO workers pool, transactions and graceful shutdown, salt passes
+// TODO workers pool, transactions and graceful shutdown, salt passes gomock
 
 func main() {
 	//init config

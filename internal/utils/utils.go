@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/base64"
 	"io"
 	"net/http"
 )
@@ -11,6 +12,11 @@ type ContextKey string
 type GzipWriter struct {
 	http.ResponseWriter
 	Writer io.Writer
+}
+
+type WorkersResponse struct {
+	WorkerID int
+	Err      error
 }
 
 // Обертка метода Write для записи компрессированных сообщений
@@ -26,4 +32,17 @@ func ArrayContains(arr []string, str string) bool {
 		}
 	}
 	return false
+}
+
+func EncodeString(s string) string {
+	return base64.URLEncoding.EncodeToString([]byte(s))
+}
+
+func DecodeString(s string) (string, error) {
+	b, err := base64.URLEncoding.DecodeString(s)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+
 }
