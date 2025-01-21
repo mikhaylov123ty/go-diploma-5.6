@@ -67,6 +67,7 @@ func (a *Accrual) Sync() {
 
 		newOrders, err := a.ordersRepo.GetNew(ctx)
 		if err != nil {
+			_ = a.transaction.Rollback()
 			slog.Error("accrual sync", slog.String("method", "getNewOrders"), slog.String("error", err.Error()))
 			continue
 		}
@@ -157,6 +158,7 @@ func (a *Accrual) SyncWorker(jobs <-chan *models.OrderData, results chan<- *util
 				slog.Error("accrual transaction begin err", slog.String("error", err.Error()))
 				res.Err = err
 				results <- res
+
 				continue
 			}
 
@@ -167,6 +169,7 @@ func (a *Accrual) SyncWorker(jobs <-chan *models.OrderData, results chan<- *util
 					_ = a.transaction.Rollback()
 					res.Err = err
 					results <- res
+
 					continue
 				}
 
@@ -180,10 +183,11 @@ func (a *Accrual) SyncWorker(jobs <-chan *models.OrderData, results chan<- *util
 			userBalanceData.Current += accrualData.Accrual
 
 			if err = a.ordersRepo.Update(ctx, order); err != nil {
-				slog.Error("accrual sync", slog.String("method", "ordersRepo.Update"), slog.String("error", err.Error()))
 				_ = a.transaction.Rollback()
+				slog.Error("accrual sync", slog.String("method", "ordersRepo.Update"), slog.String("error", err.Error()))
 				res.Err = err
 				results <- res
+
 				continue
 			}
 
@@ -192,6 +196,7 @@ func (a *Accrual) SyncWorker(jobs <-chan *models.OrderData, results chan<- *util
 				slog.Error("accrual sync", slog.String("method", "balanceRepo.Update"), slog.String("error", err.Error()))
 				res.Err = err
 				results <- res
+
 				continue
 			}
 
@@ -199,6 +204,7 @@ func (a *Accrual) SyncWorker(jobs <-chan *models.OrderData, results chan<- *util
 				slog.Error("accural sync failed commit transaction", slog.String("error", err.Error()))
 				res.Err = err
 				results <- res
+
 				continue
 			}
 
