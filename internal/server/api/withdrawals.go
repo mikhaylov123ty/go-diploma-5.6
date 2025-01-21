@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"log"
 	"net/http"
 )
@@ -22,7 +23,7 @@ func NewWithdrawalsHandler(withdrawalsProvider withdrawalsProvider) *Withdrawals
 }
 
 func (h *WithdrawalsHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	login := r.Context().Value("login").(string)
+	login := r.Context().Value(utils.ContextKey("login")).(string)
 
 	resData, err := h.withdrawalsProvider.Get(login)
 	if err != nil {

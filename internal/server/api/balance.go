@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"log"
 	"net/http"
 )
@@ -27,7 +28,7 @@ func NewGetBalanceHandler(balanceProvider balanceGetUserProvider) *BalanceHandle
 }
 
 func (h *BalanceHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	balance, err := h.balanceProvider.GetBalance(r.Context().Value("login").(string))
+	balance, err := h.balanceProvider.GetBalance(r.Context().Value(utils.ContextKey("login")).(string))
 	if err != nil {
 		if err.Error() != "user not found" {
 			log.Printf("error getting user: %v", err)

@@ -1,13 +1,18 @@
 package server
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
@@ -39,7 +44,13 @@ type Claims struct {
 	Login string
 }
 
-func New(address string, usersRepo users.Storage, ordersRepo orders.Storage, balanceRepo balance.Storage, witdrawRepo withdrawals.Storage, secretKey string) *Server {
+func New(
+	address string,
+	usersRepo users.Storage,
+	ordersRepo orders.Storage,
+	balanceRepo balance.Storage,
+	witdrawRepo withdrawals.Storage,
+	secretKey string) *Server {
 	return &Server{
 		address:      address,
 		usersRepo:    usersRepo,
@@ -52,14 +63,14 @@ func New(address string, usersRepo users.Storage, ordersRepo orders.Storage, bal
 
 func (s *Server) Start() error {
 	router := s.newRouter()
-	//add compression, logs
-	//router.Use()
-	fmt.Println("Starting server on ", s.address)
+
+	slog.Info("starting server", slog.String("address", s.address))
 	return http.ListenAndServe(s.address, router)
 }
 
 func (s *Server) newRouter() *chi.Mux {
 	router := chi.NewRouter()
+	router.Use(s.withlogger, s.withGZipEncode)
 
 	router.Route(userHandlerPath, func(router chi.Router) {
 
@@ -108,7 +119,7 @@ func (s *Server) authHandler(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "login", claims.Login)
+		ctx := context.WithValue(r.Context(), utils.ContextKey("login"), claims.Login)
 		r = r.WithContext(ctx)
 
 		next(w, r)
@@ -159,7 +170,7 @@ func (s *Server) signToken(next http.HandlerFunc) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		fmt.Println(data)
+		slog.DebugContext(r.Context(), "signing token", slog.Any("data", data))
 
 		r.Body.Close()
 
@@ -174,17 +185,46 @@ func (s *Server) signToken(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "token", tokenString)
-		ctx = context.WithValue(ctx, "login", data.Login)
-		ctx = context.WithValue(ctx, "pass", data.Pass)
+		ctx := context.WithValue(r.Context(), utils.ContextKey("token"), tokenString)
+		ctx = context.WithValue(ctx, utils.ContextKey("login"), data.Login)
+		ctx = context.WithValue(ctx, utils.ContextKey("pass"), data.Pass)
 		r = r.WithContext(ctx)
 
+		slog.DebugContext(r.Context(), "sign token", slog.String("token string", tokenString))
 		next(w, r)
 	}
 }
 
-//func (s *Server) logger(next http.HandlerFunc) http.HandlerFunc {
-//	return func(w http.ResponseWriter, r *http.Request) {
-//
-//	}
-//}
+func (s *Server) withlogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		newUUID := uuid.New()
+		ctx := context.WithValue(r.Context(), utils.ContextKey("processID"), newUUID)
+		r = r.WithContext(ctx)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// middleware эндпоинтов для компрессии
+func (s *Server) withGZipEncode(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Проверка хедеров
+		headers := strings.Split(r.Header.Get("Accept-Encoding"), ",")
+		if !utils.ArrayContains(headers, "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		gz, err := gzip.NewWriterLevel(w, gzip.BestCompression)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "gZip encode", slog.String("error", err.Error()))
+		}
+		defer gz.Close()
+
+		slog.DebugContext(r.Context(), "compressing request with gzip")
+
+		w.Header().Set("Content-Encoding", "gzip")
+
+		next.ServeHTTP(utils.GzipWriter{ResponseWriter: w, Writer: gz}, r)
+	})
+}

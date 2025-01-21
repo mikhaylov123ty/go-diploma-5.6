@@ -2,7 +2,9 @@ package api
 
 import (
 	"database/sql"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -21,8 +23,9 @@ func NewRegisterHandler(userRegister userRegister) *RegisterHandler {
 }
 
 func (h *RegisterHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	login := (r.Context().Value("login")).(string)
-	pass := r.Context().Value("pass").(string)
+	login := r.Context().Value(utils.ContextKey("login")).(string)
+	pass := r.Context().Value(utils.ContextKey("pass")).(string)
+	slog.DebugContext(r.Context(), "context login and pass", slog.String("login", login), slog.String("pass", pass))
 	if err := h.userRegister.SaveUser(login, pass); err != nil {
 		log.Println(err)
 		//TODO fix error and salt pass
@@ -34,6 +37,6 @@ func (h *RegisterHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Add("Authorization", r.Context().Value("token").(string))
+	w.Header().Add("Authorization", r.Context().Value(utils.ContextKey("token")).(string))
 	w.WriteHeader(http.StatusOK)
 }

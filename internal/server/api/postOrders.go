@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"io"
 	"log"
 	"net/http"
@@ -39,7 +40,7 @@ func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	login := r.Context().Value("login").(string)
+	login := r.Context().Value(utils.ContextKey("login")).(string)
 
 	user, err := h.userProvider.GetUser(login)
 	if err != nil {
