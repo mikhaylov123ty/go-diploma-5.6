@@ -4,10 +4,9 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
+	"sync"
+
 	"io"
 	"log"
 	"log/slog"
@@ -17,13 +16,16 @@ import (
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/api"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/utils"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/transactions"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/users"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
 )
 
 const (
@@ -31,7 +33,8 @@ const (
 )
 
 type Server struct {
-	address      string
+	srv          *http.Server
+	transactions transactions.Handler
 	usersRepo    users.Storage
 	ordersRepo   orders.Storage
 	balanceRepo  balance.Storage
@@ -46,13 +49,17 @@ type Claims struct {
 
 func New(
 	address string,
+	transactions transactions.Handler,
 	usersRepo users.Storage,
 	ordersRepo orders.Storage,
 	balanceRepo balance.Storage,
 	witdrawRepo withdrawals.Storage,
 	secretKey string) *Server {
 	return &Server{
-		address:      address,
+		srv: &http.Server{
+			Addr: address,
+		},
+		transactions: transactions,
 		usersRepo:    usersRepo,
 		ordersRepo:   ordersRepo,
 		balanceRepo:  balanceRepo,
@@ -61,11 +68,14 @@ func New(
 	}
 }
 
-func (s *Server) Start() error {
-	router := s.newRouter()
+func (s *Server) Start() {
+	s.srv.Handler = s.newRouter()
 
-	slog.Info("starting server", slog.String("address", s.address))
-	return http.ListenAndServe(s.address, router)
+	slog.Info("starting server", slog.String("address", s.srv.Addr))
+
+	if err := s.srv.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func (s *Server) newRouter() *chi.Mux {
@@ -83,15 +93,15 @@ func (s *Server) newRouter() *chi.Mux {
 		})
 
 		router.Route("/orders", func(router chi.Router) {
-			router.Post("/", s.authHandler(api.NewPostOrdersHandler(s.ordersRepo, s.usersRepo).Handle))
-			router.Get("/", s.authHandler(api.NewGetOrdersHandler(s.ordersRepo, s.usersRepo).Handle))
+			router.Post("/", s.authHandler(api.NewPostOrdersHandler(s.ordersRepo, s.usersRepo, s.transactions).Handle))
+			router.Get("/", s.authHandler(api.NewGetOrdersHandler(s.ordersRepo, s.usersRepo, s.transactions).Handle))
 		})
 
 		router.Route("/balance", func(router chi.Router) {
 			router.Get("/", s.authHandler(api.NewGetBalanceHandler(s.balanceRepo).Handle))
 
 			router.Route("/withdraw", func(router chi.Router) {
-				router.Post("/", s.authHandler(api.NewWithdrawHandler(s.balanceRepo, s.ordersRepo, s.withdrawRepo).Handle))
+				router.Post("/", s.authHandler(api.NewWithdrawHandler(s.balanceRepo, s.ordersRepo, s.withdrawRepo, s.transactions).Handle))
 			})
 		})
 
@@ -108,13 +118,16 @@ func (s *Server) authHandler(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
+			slog.WarnContext(r.Context(), "auth handler empty")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		claims, err := s.parseToken(authHeader)
+		claims, err := s.parseToken(r.Context(), authHeader)
 		if err != nil {
-			log.Println(err)
+			slog.ErrorContext(r.Context(), "auth handler",
+				slog.String("method", "parse tokent"),
+				slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -126,7 +139,7 @@ func (s *Server) authHandler(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (s *Server) parseToken(tokenString string) (*Claims, error) {
+func (s *Server) parseToken(ctx context.Context, tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -135,18 +148,19 @@ func (s *Server) parseToken(tokenString string) (*Claims, error) {
 		return []byte(s.secretKey), nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse token: %w", err)
 	}
 
 	if !token.Valid {
-		return nil, errors.New("invalid token")
+		return nil, fmt.Errorf("invalid token")
 	}
 
 	if claims.ExpiresAt.Before(time.Now()) {
-		return nil, errors.New("token expired")
+		return nil, fmt.Errorf("token is expired")
 	}
 
-	fmt.Println("Claims", claims)
+	slog.DebugContext(ctx, "parse token", slog.Any("claims", claims))
+
 	return claims, nil
 }
 
@@ -155,7 +169,9 @@ func (s *Server) signToken(next http.HandlerFunc) http.HandlerFunc {
 		data := &models.UserData{}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			log.Println("read body error", err)
+			slog.ErrorContext(r.Context(), "sign token",
+				slog.String("method", "read body"),
+				slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -227,4 +243,13 @@ func (s *Server) withGZipEncode(next http.Handler) http.Handler {
 
 		next.ServeHTTP(utils.GzipWriter{ResponseWriter: w, Writer: gz}, r)
 	})
+}
+
+func (s *Server) Shutdown(ctx context.Context, wg *sync.WaitGroup) {
+	slog.Warn("Server is shutting down...")
+	if err := s.srv.Shutdown(ctx); err != nil {
+		slog.Error("Server Shutdown Failed", slog.String("error", err.Error()))
+	}
+	slog.Warn("Server exited properly")
+	wg.Done()
 }

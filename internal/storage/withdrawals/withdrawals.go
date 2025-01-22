@@ -1,10 +1,11 @@
 package withdrawals
 
 import (
+	"context"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 )
 
 type Storage interface {
-	Update(*models.WithdrawData) error
-	Get(string) ([]*models.WithdrawData, error)
+	Update(context.Context, *models.WithdrawData) error
+	GetByLogin(context.Context, string) ([]*models.WithdrawData, error)
 }

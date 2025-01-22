@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
+	"sync"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
 	balanceMemory "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance/memory"
@@ -11,6 +13,8 @@ import (
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders"
 	ordersMemory "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders/memory"
 	ordersPostgres "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders/postgres"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/transactions"
+	transactionsPostgres "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/transactions/postgres"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/users"
 	usersMemory "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/users/memory"
 	usersPostgres "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/users/postgres"
@@ -30,6 +34,7 @@ const (
 
 type Storage struct {
 	Conn           *sql.DB
+	Transactions   transactions.Handler
 	UsersRepo      users.Storage
 	OrdersRepo     orders.Storage
 	BalanceRepo    balance.Storage
@@ -58,11 +63,16 @@ func New(dbURI string) (*Storage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed initialize migrations: %w", err)
 		}
+
 		if err = m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 			return nil, fmt.Errorf("failed run migration: %w", err)
 		}
 
+		tx := transactionsPostgres.Init(conn)
+
 		return &Storage{
+			Conn:           conn,
+			Transactions:   tx,
 			UsersRepo:      usersPostgres.Init(conn),
 			OrdersRepo:     ordersPostgres.Init(conn),
 			BalanceRepo:    balancePostgres.Init(conn),
@@ -76,4 +86,13 @@ func New(dbURI string) (*Storage, error) {
 		BalanceRepo:    balanceMemory.Init(),
 		WithdrawalRepo: withdrawalsMemory.Init(),
 	}, nil
+}
+
+func (s *Storage) ShutDown(wg *sync.WaitGroup) {
+	slog.Warn("DB is shutting down...")
+	if err := s.Conn.Close(); err != nil {
+		slog.Error("DB Close  Failed", slog.String("error", err.Error()))
+	}
+	slog.Warn("DB closed properly")
+	wg.Done()
 }

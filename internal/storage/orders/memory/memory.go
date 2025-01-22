@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"fmt"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"sync"
@@ -17,7 +18,7 @@ func Init() *Memory {
 	}
 }
 
-func (m *Memory) CreateOrder(order *models.OrderData) error {
+func (m *Memory) Create(ctx context.Context, order *models.OrderData) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -26,7 +27,7 @@ func (m *Memory) CreateOrder(order *models.OrderData) error {
 	return nil
 }
 
-func (m *Memory) GetOrders(userlogin string) ([]*models.OrderData, error) {
+func (m *Memory) GetByLogin(ctx context.Context, userlogin string) ([]*models.OrderData, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -41,7 +42,7 @@ func (m *Memory) GetOrders(userlogin string) ([]*models.OrderData, error) {
 	return orders, nil
 }
 
-func (m *Memory) GetNewOrders() ([]*models.OrderData, error) {
+func (m *Memory) GetNew(ctx context.Context) ([]*models.OrderData, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	var newOrders []*models.OrderData
@@ -55,7 +56,7 @@ func (m *Memory) GetNewOrders() ([]*models.OrderData, error) {
 	return newOrders, nil
 }
 
-func (m *Memory) GetOrderByID(orderID string) (*models.OrderData, error) {
+func (m *Memory) GetByID(ctx context.Context, orderID string) (*models.OrderData, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -66,7 +67,7 @@ func (m *Memory) GetOrderByID(orderID string) (*models.OrderData, error) {
 	return m.DB[orderID], nil
 }
 
-func (m *Memory) Update(data *models.OrderData) error {
+func (m *Memory) Update(ctx context.Context, data *models.OrderData) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.DB[data.OrderID] = data

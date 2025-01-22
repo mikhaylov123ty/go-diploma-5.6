@@ -1,17 +1,19 @@
 package main
 
 import (
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/logger"
+	"context"
 	"log"
-	"log/slog"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/config"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/logger"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/accrual"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage"
 )
-
-// TODO logger, retrier, workers pool transactions and graceful shutdown
 
 func main() {
 	//init config
@@ -22,25 +24,24 @@ func main() {
 
 	logger.Init(cfg.LogLevel)
 
-	slog.Info("test")
-
 	//init storage
 	storages, err := storage.New(cfg.DBURI)
 	if err != nil {
 		log.Fatal("failed init storages: ", err)
 	}
-	defer storages.Conn.Close()
 
 	//init accural
 	accrualInstance := accrual.NewAccrual(
 		cfg.AccuralSystemAddress,
 		storages.OrdersRepo,
 		storages.BalanceRepo,
+		storages.Transactions,
 	)
 
 	//init server
 	serverInstance := server.New(
 		cfg.Address,
+		storages.Transactions,
 		storages.UsersRepo,
 		storages.OrdersRepo,
 		storages.BalanceRepo,
@@ -48,11 +49,28 @@ func main() {
 		cfg.Secret,
 	)
 
-	//start processing accrual orders
+	//run accrual sync
 	go accrualInstance.Sync()
 
 	//run server
-	if err = serverInstance.Start(); err != nil {
-		log.Fatal("failed start server: ", err)
-	}
+	go serverInstance.Start()
+
+	//graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	<-quit
+
+	wg := sync.WaitGroup{}
+	wg.Add(3)
+
+	go func() {
+		serverInstance.Shutdown(context.Background(), &wg)
+	}()
+
+	go func() {
+		storages.ShutDown(&wg)
+	}()
+
+	wg.Wait()
 }

@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -18,7 +19,7 @@ func Init() *Memory {
 	}
 }
 
-func (m *Memory) GetBalance(login string) (*models.BalanceData, error) {
+func (m *Memory) GetByLogin(ctx context.Context, login string) (*models.BalanceData, error) {
 	u, ok := m.DB[login]
 	if !ok {
 		return nil, fmt.Errorf("user not found")
@@ -28,7 +29,7 @@ func (m *Memory) GetBalance(login string) (*models.BalanceData, error) {
 
 }
 
-func (m *Memory) Update(data *models.BalanceData) error {
+func (m *Memory) Update(ctx context.Context, data *models.BalanceData) error {
 	m.DB[data.UserLogin] = data
 	return nil
 }

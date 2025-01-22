@@ -1,75 +1,100 @@
 package api
 
 import (
+	"context"
 	"database/sql"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/utils"
 )
 
 type OrderPostHandler struct {
-	orderSaver   ordersPostSaver
-	userProvider ordersPostUserProvider
+	orderSaver          ordersPostSaver
+	userProvider        ordersPostUserProvider
+	transactionsHandler utils.TransactionsHandler
 }
 
 type ordersPostSaver interface {
-	CreateOrder(*models.OrderData) error
-	GetOrderByID(string) (*models.OrderData, error)
+	Create(context.Context, *models.OrderData) error
+	GetByID(context.Context, string) (*models.OrderData, error)
 }
 
 type ordersPostUserProvider interface {
-	GetUser(string) (*models.UserData, error)
+	GetByLogin(context.Context, string) (*models.UserData, error)
 }
 
-func NewPostOrdersHandler(orderSaver ordersPostSaver, userProvider ordersPostUserProvider) *OrderPostHandler {
+func NewPostOrdersHandler(
+	orderSaver ordersPostSaver,
+	userProvider ordersPostUserProvider,
+	transactionsHandler utils.TransactionsHandler) *OrderPostHandler {
 	return &OrderPostHandler{
 		orderSaver,
 		userProvider,
+		transactionsHandler,
 	}
 }
 
 func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Println("ERROR READ BODY", err)
+		slog.ErrorContext(r.Context(), "order post handler", slog.String("method", "read_body"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
 
 	login := r.Context().Value(utils.ContextKey("login")).(string)
+	if login == "" {
+		slog.ErrorContext(r.Context(), "order post handler. empty login")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-	user, err := h.userProvider.GetUser(login)
+	if err = h.transactionsHandler.Begin(); err != nil {
+		slog.ErrorContext(r.Context(), "order post handler", slog.String("error", err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	user, err := h.userProvider.GetByLogin(r.Context(), login)
 	if err != nil {
+		_ = h.transactionsHandler.Rollback()
+		slog.ErrorContext(r.Context(), "order post handler", slog.String("method", "getUser"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if user == nil {
+		_ = h.transactionsHandler.Rollback()
+		slog.DebugContext(r.Context(), "order post handler", slog.String("method", "user_nill_check"), slog.Bool("is nill", false))
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
 	orderID := string(body)
-	log.Println("POST ORDER POST", orderID)
-
 	if !checkLuhn(orderID) {
+		_ = h.transactionsHandler.Rollback()
+		slog.DebugContext(r.Context(), "order post handler", slog.String("method", "Luhn_order_check"), slog.Bool("is ok", false))
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
 
-	orderCheck, err := h.orderSaver.GetOrderByID(orderID)
+	orderData, err := h.orderSaver.GetByID(r.Context(), orderID)
 	if err != nil && err != sql.ErrNoRows {
-		log.Println("error get order by id", err)
+		_ = h.transactionsHandler.Rollback()
+		slog.ErrorContext(r.Context(), "order post handler", slog.String("method", "getOrderByID"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	if orderCheck != nil {
-		if orderCheck.UserLogin != user.Login {
+	if orderData != nil {
+		_ = h.transactionsHandler.Rollback()
+		if orderData.UserLogin != user.Login {
+			slog.DebugContext(r.Context(), "order post handler", slog.String("method", "user_check"), slog.Bool("is ok", false))
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
@@ -85,13 +110,20 @@ func (h *OrderPostHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		UploadedAt: time.Now(),
 	}
 
-	if err = h.orderSaver.CreateOrder(order); err != nil {
-		log.Println("ERROR CREATE ORDER", err)
+	if err = h.orderSaver.Create(r.Context(), order); err != nil {
+		_ = h.transactionsHandler.Rollback()
+		slog.ErrorContext(r.Context(), "order post handler", slog.String("method", "createOrder"), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	log.Println("CREATED ORDER", orderID)
+	if err := h.transactionsHandler.Commit(); err != nil {
+		slog.ErrorContext(r.Context(), "order post handler", slog.String("error", err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	slog.DebugContext(r.Context(), "order post handler", slog.Any("created_order", order))
 
 	w.WriteHeader(http.StatusAccepted)
 }

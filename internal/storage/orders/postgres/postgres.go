@@ -1,11 +1,15 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
+
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+
 	"github.com/Masterminds/squirrel"
 	_ "github.com/lib/pq"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 )
 
 type Postgres struct {
@@ -16,7 +20,7 @@ func Init(db *sql.DB) *Postgres {
 	return &Postgres{db: db}
 }
 
-func (p *Postgres) CreateOrder(order *models.OrderData) error {
+func (p *Postgres) Create(ctx context.Context, order *models.OrderData) error {
 	query, args, err := squirrel.Insert("orders").
 		Columns("number", "user_login", "status", "accrual", "uploaded_at").
 		Values(order.OrderID, order.UserLogin, order.Status, order.Accrual, order.UploadedAt).
@@ -26,7 +30,8 @@ func (p *Postgres) CreateOrder(order *models.OrderData) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+
+	slog.DebugContext(ctx, "Create Order", slog.String("query", query), slog.Any("args", args))
 
 	res, err := p.db.Exec(query, args...)
 	if err != nil {
@@ -40,7 +45,7 @@ func (p *Postgres) CreateOrder(order *models.OrderData) error {
 	return nil
 }
 
-func (p *Postgres) GetOrders(userID string) ([]*models.OrderData, error) {
+func (p *Postgres) GetByLogin(ctx context.Context, userID string) ([]*models.OrderData, error) {
 	query, args, err := squirrel.Select("*").
 		From("orders").
 		Where(squirrel.Eq{"user_login": userID}).
@@ -50,7 +55,8 @@ func (p *Postgres) GetOrders(userID string) ([]*models.OrderData, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+
+	slog.DebugContext(ctx, "Get Orders", slog.String("query", query), slog.Any("args", args))
 
 	rows, err := p.db.Query(query, args...)
 	if err != nil {
@@ -72,7 +78,7 @@ func (p *Postgres) GetOrders(userID string) ([]*models.OrderData, error) {
 	return res, nil
 }
 
-func (p *Postgres) GetNewOrders() ([]*models.OrderData, error) {
+func (p *Postgres) GetNew(ctx context.Context) ([]*models.OrderData, error) {
 	query, args, err := squirrel.Select("*").
 		From("orders").
 		Where(squirrel.Eq{"status": "NEW"}).
@@ -82,7 +88,8 @@ func (p *Postgres) GetNewOrders() ([]*models.OrderData, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+
+	slog.DebugContext(ctx, "Get New Orders", slog.String("query", query), slog.Any("args", args))
 
 	rows, err := p.db.Query(query, args...)
 	if err != nil {
@@ -104,7 +111,7 @@ func (p *Postgres) GetNewOrders() ([]*models.OrderData, error) {
 	return res, nil
 }
 
-func (p *Postgres) GetOrderByID(orderID string) (*models.OrderData, error) {
+func (p *Postgres) GetByID(ctx context.Context, orderID string) (*models.OrderData, error) {
 	query, args, err := squirrel.Select("*").
 		From("orders").
 		Where(squirrel.Eq{"number": orderID}).
@@ -113,7 +120,7 @@ func (p *Postgres) GetOrderByID(orderID string) (*models.OrderData, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+	slog.DebugContext(ctx, "Get By ID Order", slog.String("query", query), slog.Any("args", args))
 
 	row := p.db.QueryRow(query, args...)
 	if row.Err() != nil {
@@ -137,7 +144,7 @@ func (p *Postgres) GetOrderByID(orderID string) (*models.OrderData, error) {
 
 }
 
-func (p *Postgres) Update(data *models.OrderData) error {
+func (p *Postgres) Update(ctx context.Context, data *models.OrderData) error {
 	query, args, err := squirrel.Insert("orders").
 		Columns("number", "user_login", "status", "accrual", "uploaded_at").
 		Values(data.OrderID, data.UserLogin, data.Status, data.Accrual, data.UploadedAt).
@@ -148,7 +155,8 @@ func (p *Postgres) Update(data *models.OrderData) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("QUERY", query, "ARGS", args)
+
+	slog.DebugContext(ctx, "Update Order", slog.String("query", query), slog.Any("args", args))
 
 	res, err := p.db.Exec(query, args...)
 	if err != nil {

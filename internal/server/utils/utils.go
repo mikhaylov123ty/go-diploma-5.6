@@ -5,20 +5,28 @@ import (
 	"net/http"
 )
 
+type TransactionsHandler interface {
+	Begin() error
+	Commit() error
+	Rollback() error
+}
+
 type ContextKey string
 
-// Структура обертки компрессии gzip для интерфейса writer
 type GzipWriter struct {
 	http.ResponseWriter
 	Writer io.Writer
 }
 
-// Обертка метода Write для записи компрессированных сообщений
+type WorkersResponse struct {
+	OrderID string
+	Err     error
+}
+
 func (w GzipWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
-// Метод проверки строки в массиве строк
 func ArrayContains(arr []string, str string) bool {
 	for _, a := range arr {
 		if a == str {
