@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -62,15 +61,17 @@ func main() {
 	<-quit
 
 	wg := sync.WaitGroup{}
-	wg.Add(3)
+	wg.Add(2)
+	
+	go func(wg *sync.WaitGroup) {
+		serverInstance.Shutdown()
+		wg.Done()
+	}(&wg)
 
-	go func() {
-		serverInstance.Shutdown(context.Background(), &wg)
-	}()
-
-	go func() {
-		storages.ShutDown(&wg)
-	}()
+	go func(wg *sync.WaitGroup) {
+		storages.ShutDown()
+		wg.Done()
+	}(&wg)
 
 	wg.Wait()
 }

@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
-
 	"io"
 	"log"
 	"log/slog"
@@ -245,11 +243,10 @@ func (s *Server) withGZipEncode(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) Shutdown(ctx context.Context, wg *sync.WaitGroup) {
+func (s *Server) Shutdown() {
 	slog.Warn("Server is shutting down...")
-	if err := s.srv.Shutdown(ctx); err != nil {
+	if err := s.srv.Shutdown(context.Background()); err != nil {
 		slog.Error("Server Shutdown Failed", slog.String("error", err.Error()))
 	}
 	slog.Warn("Server exited properly")
-	wg.Done()
 }

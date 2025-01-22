@@ -4,9 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log/slog"
-	"sync"
-
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
 	balanceMemory "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance/memory"
 	balancePostgres "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance/postgres"
@@ -21,6 +18,7 @@ import (
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals"
 	withdrawalsMemory "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals/memory"
 	withdrawalsPostgres "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals/postgres"
+	"log/slog"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -88,11 +86,10 @@ func New(dbURI string) (*Storage, error) {
 	}, nil
 }
 
-func (s *Storage) ShutDown(wg *sync.WaitGroup) {
+func (s *Storage) ShutDown() {
 	slog.Warn("DB is shutting down...")
 	if err := s.Conn.Close(); err != nil {
 		slog.Error("DB Close  Failed", slog.String("error", err.Error()))
 	}
 	slog.Warn("DB closed properly")
-	wg.Done()
 }
