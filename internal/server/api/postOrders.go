@@ -3,18 +3,19 @@ package api
 import (
 	"context"
 	"database/sql"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 	"io"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/utils"
 )
 
 type OrderPostHandler struct {
 	orderSaver          ordersPostSaver
 	userProvider        ordersPostUserProvider
-	transactionsHandler transactionsHandler
+	transactionsHandler utils.TransactionsHandler
 }
 
 type ordersPostSaver interface {
@@ -29,7 +30,7 @@ type ordersPostUserProvider interface {
 func NewPostOrdersHandler(
 	orderSaver ordersPostSaver,
 	userProvider ordersPostUserProvider,
-	transactionsHandler transactionsHandler) *OrderPostHandler {
+	transactionsHandler utils.TransactionsHandler) *OrderPostHandler {
 	return &OrderPostHandler{
 		orderSaver,
 		userProvider,

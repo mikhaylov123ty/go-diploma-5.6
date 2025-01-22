@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+
 	"io"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/utils"
 )
 
 type WithdrawRequest struct {
@@ -22,7 +23,7 @@ type WithdrawHandler struct {
 	balanceProvider     balanceProvider
 	orderProvider       orderProvider
 	withdrawProvider    withdrawProvider
-	transactionsHandler transactionsHandler
+	transactionsHandler utils.TransactionsHandler
 }
 
 type balanceProvider interface {
@@ -43,7 +44,7 @@ func NewWithdrawHandler(
 	balanceProvider balanceProvider,
 	orderProvider orderProvider,
 	withdrawProvider withdrawProvider,
-	transactionsHandler transactionsHandler) *WithdrawHandler {
+	transactionsHandler utils.TransactionsHandler) *WithdrawHandler {
 	return &WithdrawHandler{
 		balanceProvider:     balanceProvider,
 		orderProvider:       orderProvider,

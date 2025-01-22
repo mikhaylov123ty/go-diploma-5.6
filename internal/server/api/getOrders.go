@@ -7,13 +7,13 @@ import (
 	"net/http"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/utils"
 )
 
 type OrdersGetHandler struct {
 	ordersProvider      ordersGetProvider
 	userProvider        ordersGetUserProvider
-	transactionsHandler transactionsHandler
+	transactionsHandler utils.TransactionsHandler
 }
 
 type ordersGetProvider interface {
@@ -24,7 +24,10 @@ type ordersGetUserProvider interface {
 	GetByLogin(context.Context, string) (*models.UserData, error)
 }
 
-func NewGetOrdersHandler(ordersProvider ordersGetProvider, userProvider ordersGetUserProvider, transactionsHandler transactionsHandler) *OrdersGetHandler {
+func NewGetOrdersHandler(
+	ordersProvider ordersGetProvider,
+	userProvider ordersGetUserProvider,
+	transactionsHandler utils.TransactionsHandler) *OrdersGetHandler {
 	return &OrdersGetHandler{
 		ordersProvider,
 		userProvider,
@@ -39,7 +42,7 @@ func (h *OrdersGetHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	
+
 	if err := h.transactionsHandler.Begin(); err != nil {
 		slog.ErrorContext(r.Context(), "get orders handler", slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusInternalServerError)

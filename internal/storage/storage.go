@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
+	"sync"
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
 	balanceMemory "github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance/memory"
@@ -84,4 +86,13 @@ func New(dbURI string) (*Storage, error) {
 		BalanceRepo:    balanceMemory.Init(),
 		WithdrawalRepo: withdrawalsMemory.Init(),
 	}, nil
+}
+
+func (s *Storage) ShutDown(wg *sync.WaitGroup) {
+	slog.Warn("DB is shutting down...")
+	if err := s.Conn.Close(); err != nil {
+		slog.Error("DB Close  Failed", slog.String("error", err.Error()))
+	}
+	slog.Warn("DB closed properly")
+	wg.Done()
 }

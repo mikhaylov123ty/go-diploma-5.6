@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/utils"
 
 	"github.com/google/uuid"
 )

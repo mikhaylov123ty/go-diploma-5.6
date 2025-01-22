@@ -5,7 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/transactions"
+	"sync"
+
 	"io"
 	"log"
 	"log/slog"
@@ -15,11 +16,12 @@ import (
 
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/models"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/api"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/server/utils"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/balance"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/orders"
+	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/transactions"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/users"
 	"github.com/mikhaylov123ty/go-diploma-5.6/internal/storage/withdrawals"
-	"github.com/mikhaylov123ty/go-diploma-5.6/internal/utils"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v4"
@@ -31,7 +33,7 @@ const (
 )
 
 type Server struct {
-	address      string
+	srv          *http.Server
 	transactions transactions.Handler
 	usersRepo    users.Storage
 	ordersRepo   orders.Storage
@@ -54,7 +56,9 @@ func New(
 	witdrawRepo withdrawals.Storage,
 	secretKey string) *Server {
 	return &Server{
-		address:      address,
+		srv: &http.Server{
+			Addr: address,
+		},
 		transactions: transactions,
 		usersRepo:    usersRepo,
 		ordersRepo:   ordersRepo,
@@ -64,11 +68,14 @@ func New(
 	}
 }
 
-func (s *Server) Start() error {
-	router := s.newRouter()
+func (s *Server) Start() {
+	s.srv.Handler = s.newRouter()
 
-	slog.Info("starting server", slog.String("address", s.address))
-	return http.ListenAndServe(s.address, router)
+	slog.Info("starting server", slog.String("address", s.srv.Addr))
+
+	if err := s.srv.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func (s *Server) newRouter() *chi.Mux {
@@ -78,11 +85,11 @@ func (s *Server) newRouter() *chi.Mux {
 	router.Route(userHandlerPath, func(router chi.Router) {
 
 		router.Route("/register", func(router chi.Router) {
-			router.Post("/", s.signToken(api.NewRegisterHandler(s.usersRepo, s.transactions).Handle))
+			router.Post("/", s.signToken(api.NewRegisterHandler(s.usersRepo).Handle))
 		})
 
 		router.Route("/login", func(router chi.Router) {
-			router.Post("/", s.signToken(api.NewAuthHandler(s.usersRepo, s.transactions).Handle))
+			router.Post("/", s.signToken(api.NewAuthHandler(s.usersRepo).Handle))
 		})
 
 		router.Route("/orders", func(router chi.Router) {
@@ -91,7 +98,7 @@ func (s *Server) newRouter() *chi.Mux {
 		})
 
 		router.Route("/balance", func(router chi.Router) {
-			router.Get("/", s.authHandler(api.NewGetBalanceHandler(s.balanceRepo, s.transactions).Handle))
+			router.Get("/", s.authHandler(api.NewGetBalanceHandler(s.balanceRepo).Handle))
 
 			router.Route("/withdraw", func(router chi.Router) {
 				router.Post("/", s.authHandler(api.NewWithdrawHandler(s.balanceRepo, s.ordersRepo, s.withdrawRepo, s.transactions).Handle))
@@ -99,7 +106,7 @@ func (s *Server) newRouter() *chi.Mux {
 		})
 
 		router.Route("/withdrawals", func(router chi.Router) {
-			router.Get("/", s.authHandler(api.NewWithdrawalsHandler(s.withdrawRepo, s.transactions).Handle))
+			router.Get("/", s.authHandler(api.NewWithdrawalsHandler(s.withdrawRepo).Handle))
 		})
 
 	})
@@ -236,4 +243,13 @@ func (s *Server) withGZipEncode(next http.Handler) http.Handler {
 
 		next.ServeHTTP(utils.GzipWriter{ResponseWriter: w, Writer: gz}, r)
 	})
+}
+
+func (s *Server) Shutdown(ctx context.Context, wg *sync.WaitGroup) {
+	slog.Warn("Server is shutting down...")
+	if err := s.srv.Shutdown(ctx); err != nil {
+		slog.Error("Server Shutdown Failed", slog.String("error", err.Error()))
+	}
+	slog.Warn("Server exited properly")
+	wg.Done()
 }
